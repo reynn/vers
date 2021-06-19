@@ -1,9 +1,16 @@
 [package]
-name = "vers-core"
-version = "0.1.0"
 authors = ["Nic Patterson <nic@reynn.dev>"]
 edition = "2018"
+name    = "vers-core"
+version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+async-trait      = "0.1"
+log              = "0.4"
+serde            = { version = "1.0", features = ["derive"] }
+thiserror        = "1.0"
+directories-next = "2.0"
+toml             = "0.5"
+url              = "2.2"
