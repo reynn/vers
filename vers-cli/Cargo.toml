@@ -2,13 +2,14 @@
 [package]
 authors = ["Nic Patterson <nic@reynn.dev>"]
 edition = "2018"
-name    = "vers-cli"
+name    = "vers"
 version = "0.1.0"
 
 [dependencies]
-anyhow           = "1.0"
-log              = "0.4"
-simplelog        = "*"
-structopt        = "0.3"
-thiserror        = "1.0"
-vers-core        = { path = "../vers-core" }
+anyhow    = "1.0"
+log       = "0.4"
+smol      = "*"
+simplelog = "*"
+structopt = "0.3"
+thiserror = "1.0"
+vers-core = { path = "../vers-core" }

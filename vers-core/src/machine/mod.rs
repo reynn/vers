@@ -5,6 +5,10 @@ pub(crate) mod os_version;
 
 use self::{arch::Arch, os::Os};
 pub use errors::*;
+use thiserror::Error;
+
+#[derive(Debug, Clone, Error)]
+pub enum DetailsError {}
 
 #[derive(Debug, Clone)]
 pub struct Details {

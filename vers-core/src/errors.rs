@@ -10,7 +10,7 @@ pub enum VersCoreError {
     #[error("General error in core: {0}")]
     General(String),
     #[error("I/O Error: {0}")]
-    IoError(#[from] std::io::Error),
+    IoError(String),
     #[error("Failed to deserialize TOML: {0}")]
     TomlDeError(#[from] toml::de::Error),
     #[error("Failed to serialize TOML: {0}")]

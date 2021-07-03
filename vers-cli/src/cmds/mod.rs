@@ -1,9 +1,12 @@
-pub mod change;
-pub mod config;
-pub mod env;
-pub mod install;
-pub mod list;
-pub mod uninstall;
+pub(crate) mod change;
+pub(crate) mod completions;
+pub(crate) mod config;
+pub(crate) mod env;
+pub(crate) mod install;
+pub(crate) mod list;
+pub(crate) mod uninstall;
+
+use crate::prelude::*;
 
 use structopt::StructOpt;
 
@@ -12,6 +15,9 @@ pub enum CliSubCommands {
     /// Update $PATH variable with different environments or tool versions
     #[structopt(aliases = &["ch"])]
     Change(change::ChangeCmd),
+    /// Generate shell completions to simplify usage
+    #[structopt(aliases = &["completion", "complete"])]
+    Completions(completions::CompletionsCmd),
     /// Generate a new config or change config values in an existing config file.
     #[structopt(aliases = &["cfg", "c"])]
     Config(config::ConfigCmd),
@@ -27,4 +33,8 @@ pub enum CliSubCommands {
     /// List all tools and their current versions for the current environment
     #[structopt(aliases = &["ls"])]
     List(list::ListCmd),
+}
+
+pub trait Runnable {
+    fn run(&self, config: &Config) -> Result<()>;
 }

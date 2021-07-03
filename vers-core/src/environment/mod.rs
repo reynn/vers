@@ -1,89 +1,145 @@
 mod errors;
-mod tool;
 
 use log::*;
-use std::path::{Path, PathBuf};
+use std::{fmt::Display, fs::metadata, path::PathBuf};
 
-pub use self::{errors::*, tool::Tool};
+pub use self::errors::*;
+use crate::prelude::*;
+use thiserror::*;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Environment<'env> {
-    name: &'env str,
-    tools: Vec<&'env Tool<'env>>,
-    directory: Option<PathBuf>,
+#[derive(Debug, Clone, Error)]
+pub struct EnvironmentNameError;
+
+impl Display for EnvironmentNameError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
+    }
 }
 
-impl<'env> Drop for Environment<'env> {
+prae::define! {
+    pub EnvironmentName: String
+    validate |e| -> Option<EnvironmentNameError> {
+        let e = e.trim();
+        if e.is_empty() {
+            Some(EnvironmentNameError)
+        } else {
+            None
+        }
+    }
+}
+#[derive(Debug, PartialEq)]
+pub struct EnvironmentDirectoryError;
+
+prae::define! {
+    pub EnvironmentDirectory: PathBuf
+    validate |e| -> Option<EnvironmentDirectoryError> {
+        // if e. {} else
+        if !e.exists() {
+            if let Err(create_err) = std::fs::create_dir_all(e) {
+                error!("Failed to create directory: {:?}. Error: {:?}", e, create_err);
+                Some(EnvironmentDirectoryError)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Environment<'e> {
+    name: EnvironmentName,
+    tools: Vec<Tool<'e>>,
+    directory: PathBuf,
+}
+
+impl<'e> Drop for Environment<'e> {
     fn drop(&mut self) {
         self.save().unwrap();
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum EnvFindOptions<'find_tool> {
-    Name(String),
-    Tool(Tool<'find_tool>),
+impl<'e> Display for Environment<'e> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name.get())
+    }
 }
 
-impl<'env> Environment<'env> {
+impl<'e> Environment<'e> {
+    /// Create a new [`Environment`] within the provided base_path
     ///
-    pub fn new(name: &'env str) -> Result<Environment<'env>> {
-        Ok(Self {
-            name,
+    /// ```rust
+    /// // Environment will be created as <base_path>/<name>
+    /// let env = Environment::new("temp", "/tmp/environments")?;
+    /// ```
+    fn new<P: Into<PathBuf>>(name: &'e str, base_path: P) -> Result<Environment<'e>> {
+        let s = Self {
+            name: EnvironmentName::new(name)?,
             tools: Vec::new(),
-            directory: None,
-        })
+            directory: base_path.into(),
+        };
+        Ok(s)
     }
-    ///
-    pub fn save(&self) -> Result<&'env Environment> {
-        if let Some(dir) = &self.directory {
-            std::fs::create_dir_all(dir)?;
+
+    /// Load or create an environment
+    pub fn load_or_create<P: Into<PathBuf>>(
+        name: Option<&'e str>,
+        base_path: P,
+    ) -> Result<Environment<'e>> {
+        // let base_path = base_path.into();
+        let name = name.unwrap_or("default");
+        Ok(Environment::new(name, base_path)?)
+        // Err(EnvironmentError::General("oops, no can do".into()))
+    }
+
+    /// save the environment configuration
+    pub fn save(&self) -> Result<&'e Environment> {
+        if !&self.directory.exists() {
+            std::fs::create_dir_all(&self.directory)?;
         }
         Ok(self)
     }
 
-    ///
-    pub fn find_envs(f: &'_ EnvFindOptions, base_path: &Path) -> Result<Vec<Environment<'env>>> {
-        match f {
-            EnvFindOptions::Name(s) => Ok(vec![Self::find_env_by_name(s, base_path)?]),
-            EnvFindOptions::Tool(t) => Self::find_envs_by_tool(t, base_path), // _ => Err(EnvironmentError::General("".into())),
-        }
-    }
-
-    /// Attempts to find an existing [`Environment`]
-    ///
     /// If unable to find an environment in the provided base path,
     /// returns a [`EnvironmentError::EnvironmentNotFoundByName`]
-    fn find_env_by_name(s: &'_ str, base_path: &Path) -> Result<Environment<'env>> {
+    pub fn find_env_by_name<P: Into<PathBuf>>(s: &'_ str, base_path: P) -> Result<Environment<'e>> {
+        let base_path = base_path.into();
         info!("Finding environment named {} in {:?}", s, &base_path);
-        // base_path
-        //     .read_dir()
-        //     .expect("read_dir call failed")
-        //     .filter(|entry| {
-        //         if let Ok(entry) = entry {
-        //             println!("{:?}", entry.path());
-        //         }
-        //     })
+        if !&base_path.exists() {
+            std::fs::create_dir_all(&base_path)?;
+        }
+        for entry in base_path.read_dir()? {
+            let entry = entry?;
+            let path = entry.path();
+
+            let metadata = metadata(path)?;
+            info!("{:?}", metadata);
+        }
         Err(EnvironmentError::EnvironmentNotFoundByName(s.into()))
     }
 
-    /// Attempts to find existing [`Environment`]s that contain a tool, if a tool is provided will only return
-    ///
-    fn find_envs_by_tool(t: &'_ Tool, base_path: &Path) -> Result<Vec<Environment<'env>>> {
-        info!(
-            "Finding environments containing tool {:?} in {:?}",
-            t, &base_path
-        );
-        Err(EnvironmentError::EnvironmentNotFoundByTool(t.name.into()))
+    pub fn find_tool_by_name<S: Into<String>>(&self, tool_name: S) -> Result<Tool> {
+        let tool_name: String = tool_name.into();
+        info!("Searching for {} in {:?}", tool_name, &self.directory);
+
+        Err(EnvironmentError::ToolNotFoundInEnvironment(
+            tool_name,
+            self.directory
+                .as_path()
+                .to_str()
+                .unwrap_or("invalid-path")
+                .into(),
+        ))
     }
 
-    // fn get_environments() -> Result<Vec<Environment<'env>>> {
-    //     Ok()
-    // }
+    pub fn tools(&self) -> Option<Vec<Tool<'_>>> {
+        None
+    }
 }
 
-impl<'env> Default for Environment<'env> {
+impl<'e> Default for Environment<'e> {
     fn default() -> Self {
-        Self::new("default").unwrap()
+        Self::new("default", "").unwrap()
     }
 }

@@ -6,7 +6,12 @@ use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
-    environment_directory: PathBuf,
+    /// The directory that contains all of the environments
+    pub environment_directory: PathBuf,
+    /// The name of the environment we will interact with
+    #[serde(skip)]
+    pub environment_name: String,
+    /// The path to this exact file, used primarily for reference
     #[serde(skip)]
     file_path: PathBuf,
 }
@@ -15,19 +20,24 @@ impl Config {
     pub fn load<P: Into<PathBuf>>(file_path: Option<P>) -> Result<Self> {
         if let Some(file_path) = file_path {
             let file_path: PathBuf = file_path.into();
-            let config_file_contents = std::fs::read_to_string(file_path)?;
+            let config_file_contents = std::fs::read_to_string(file_path)
+                .map_err(|e| VersCoreError::IoError(e.to_string()))?;
             Ok(toml::from_str(&config_file_contents)?)
         } else {
-            error!("No filepath to a config file provided");
-            Err(VersCoreError::General("".into()))
+            Err(VersCoreError::General(
+                "No filepath to a config file provided".into(),
+            ))
         }
     }
 
     pub fn save(&self) -> Result<()> {
-        Ok(std::fs::write(
-            &self.file_path,
-            toml::to_string_pretty(self)?,
-        )?)
+        if let Some(parent_dir) = self.file_path.parent() {
+            if !parent_dir.exists() {
+                std::fs::create_dir_all(parent_dir).unwrap();
+            }
+        }
+        std::fs::write(&self.file_path, toml::to_string_pretty(self)?)
+            .map_err(|e| VersCoreError::IoError(e.to_string()))
     }
 }
 
@@ -38,8 +48,9 @@ impl Default for Config {
         let env_directory = data_directory.join("envs");
 
         Self {
-            environment_directory: env_directory.clone().into(),
-            file_path: data_directory.join(".vers.toml").into(),
+            environment_directory: env_directory,
+            environment_name: "default".into(),
+            file_path: data_directory.join(".vers.toml"),
         }
     }
 }
@@ -47,11 +58,6 @@ impl Default for Config {
 impl Drop for Config {
     fn drop(&mut self) {
         debug!("Saving Config file");
-        if let Some(parent_dir) = self.file_path.parent() {
-            if !parent_dir.exists() {
-                std::fs::create_dir_all(parent_dir).unwrap();
-            }
-        }
         self.save().unwrap()
     }
 }
