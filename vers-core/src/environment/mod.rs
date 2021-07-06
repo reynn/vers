@@ -84,21 +84,22 @@ impl Environment {
     /// ```rust
     /// // Environment will be created as <base_path>/<name>
     /// # use vers_core::environment::Environment;
-    /// let env = Environment::new("temp", "/tmp/environments").unwrap();
-    /// assert_eq!(env.directory(), "/tmp/environments/temp");
+    /// # let temp_dir = std::env::temp_dir();
+    /// let env = Environment::new("temp", &temp_dir).unwrap();
+    /// assert_eq!(env.directory(), temp_dir.join("envs").join("temp").to_str().unwrap());
     /// ```
     pub fn new<P: Into<PathBuf>>(name: &'_ str, base_path: P) -> Result<Environment> {
-        let s = Self {
+        Ok(Self {
             name: EnvironmentName::new(name)?,
             tools: Vec::new(),
             directory: base_path.into(),
-        };
-        Ok(s)
+        })
     }
 
     /// Provide the directory where the environment is located.
     pub fn directory(&self) -> String {
         self.directory
+            .join("envs")
             .join(self.name.get())
             .to_str()
             .unwrap_or_default()
