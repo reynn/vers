@@ -7,6 +7,6 @@ pub struct ConfigCmd {
     pub name: String,
 }
 
-pub(crate) fn execute_config_cmd(args: &ConfigCmd, cfg: &'_ Config) -> Result<()> {
+pub(crate) fn execute_config_cmd(_args: &ConfigCmd, _cfg: &'_ Config) -> Result<()> {
     Ok(())
 }

@@ -1,4 +1,4 @@
-use crate::{cmds::*, prelude::*};
+use crate::{commands::*, prelude::*};
 use std::path::PathBuf;
 use structopt::StructOpt;
 
@@ -36,6 +36,29 @@ pub struct Cli {
 impl Cli {
     pub fn new() -> Result<Cli> {
         Ok(Cli::from_args())
+    }
+
+    pub fn handle_subcommand(&self, env: &'_ Environment, cfg: &'_ Config) -> Result<()> {
+        if let Some(subcommand) = &self.subcommand {
+            match subcommand {
+                CliSubCommands::Change(args) => change::execute_change_cmd(&args, &env, &cfg)?,
+                CliSubCommands::Config(args) => config::execute_config_cmd(&args, &cfg)?,
+                CliSubCommands::Environment(cmds) => {
+                    env::execute_env_subcommand(&cmds.sub_cmd, &cfg)?
+                }
+                CliSubCommands::Install(args) => install::execute_install_cmd(&args, &env, &cfg)?,
+                CliSubCommands::Uninstall(args) => {
+                    uninstall::execute_uninstall_cmd(&args, &env, &cfg)?
+                }
+                CliSubCommands::List(args) => list::execute_list_command(&args, &env, &cfg)?,
+                CliSubCommands::Completions(args) => {
+                    completions::execute_completion_cmd(&args, &cfg)?
+                }
+            }
+        } else {
+            log::error!("No commands provided");
+        }
+        Ok(())
     }
 }
 

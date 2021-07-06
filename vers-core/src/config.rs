@@ -5,6 +5,7 @@ pub use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// TODO: write docs
 pub struct Config {
     /// The directory that contains all of the environments
     pub environment_directory: PathBuf,
@@ -17,6 +18,7 @@ pub struct Config {
 }
 
 impl Config {
+    /// TODO: write docs
     pub fn load<P: Into<PathBuf>>(file_path: Option<P>) -> Result<Self> {
         if let Some(file_path) = file_path {
             let file_path: PathBuf = file_path.into();
@@ -30,12 +32,15 @@ impl Config {
         }
     }
 
+    /// TODO: write docs
     pub fn save(&self) -> Result<()> {
         if let Some(parent_dir) = self.file_path.parent() {
             if !parent_dir.exists() {
-                std::fs::create_dir_all(parent_dir).unwrap();
+                std::fs::create_dir_all(parent_dir)
+                    .map_err(|e| VersCoreError::IoError(e.to_string()))?
             }
         }
+        debug!("Saving config to {:?}", &self.file_path);
         std::fs::write(&self.file_path, toml::to_string_pretty(self)?)
             .map_err(|e| VersCoreError::IoError(e.to_string()))
     }
@@ -57,7 +62,6 @@ impl Default for Config {
 
 impl Drop for Config {
     fn drop(&mut self) {
-        debug!("Saving Config file");
         self.save().unwrap()
     }
 }

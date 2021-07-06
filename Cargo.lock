@@ -437,20 +437,19 @@ dependencies = [
 
 [[package]]
 name = "prae"
-version = "0.3.2"
+version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea9e2f8bbfa672f3f39a784b2b4762229b0f83161dde86cc93a3ddf8b008f4cb"
+checksum = "09a2e53bb9ded5bfbb69fd88edbbd1467b43a32b6e021dd7264b079ab41e049a"
 dependencies = [
  "prae_macro",
  "serde",
- "thiserror",
 ]
 
 [[package]]
 name = "prae_macro"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edde0a2d2091b8b5e9f84ce13110ccbdf159e5b45b8fb6ac10c42b0b31ca8ff0"
+checksum = "b1274098b30804fda35d2bc98bd78f65c0981e4f5271e5dd37533048ff22f8b3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -516,6 +515,15 @@ checksum = "528532f3d801c87aec9def2add9ca802fe569e44a544afe633765267840abe64"
 dependencies = [
  "getrandom",
  "redox_syscall",
+]
+
+[[package]]
+name = "same-file"
+version = "1.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93fc1dc3aaa9bfed95e02e6eadabb4baf7e3078b0bd1b4d7b6b0b68378900502"
+dependencies = [
+ "winapi-util",
 ]
 
 [[package]]
@@ -809,6 +817,7 @@ dependencies = [
  "thiserror",
  "toml",
  "url",
+ "walkdir",
 ]
 
 [[package]]
@@ -822,6 +831,17 @@ name = "waker-fn"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9d5b2c62b4012a3e1eca5a7e077d13b3bf498c4073e33ccd58626607748ceeca"
+
+[[package]]
+name = "walkdir"
+version = "2.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "808cf2735cd4b6866113f648b791c6adc5714537bc222d9347bb203386ffda56"
+dependencies = [
+ "same-file",
+ "winapi",
+ "winapi-util",
+]
 
 [[package]]
 name = "wasi"

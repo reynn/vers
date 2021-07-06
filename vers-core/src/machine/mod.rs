@@ -8,15 +8,20 @@ pub use errors::*;
 use thiserror::Error;
 
 #[derive(Debug, Clone, Error)]
+/// TODO: write docs
 pub enum DetailsError {}
 
 #[derive(Debug, Clone)]
+/// TODO: write docs
 pub struct Details {
+    /// TODO: write docs
     pub os: Os,
+    /// TODO: write docs
     pub arch: Arch,
 }
 
 impl Details {
+    /// TODO: write docs
     pub fn get() -> Result<Details> {
         Ok(Details {
             os: Self::get_os_details()?,

@@ -1,10 +1,8 @@
-use crate::cli::Cli;
 use crate::prelude::*;
 use structopt::{
     clap::{arg_enum, Shell},
     StructOpt,
 };
-// use vers_core::prelude::*;
 
 #[derive(Debug, Clone, StructOpt)]
 pub struct CompletionsCmd {
@@ -33,7 +31,7 @@ impl From<CompletionsShell> for Shell {
     }
 }
 
-pub(crate) fn execute_completion_cmd(args: &'_ CompletionsCmd, cfg: &'_ Config) -> Result<()> {
+pub(crate) fn execute_completion_cmd(args: &'_ CompletionsCmd, _: &'_ Config) -> Result<()> {
     Cli::clap().gen_completions_to(
         env!("CARGO_PKG_NAME"),
         args.clone().shell.into(),

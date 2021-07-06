@@ -1,22 +1,30 @@
-use std::fmt::Display;
-
 use crate::errors::*;
+use serde::{Deserialize, Serialize};
+use std::fmt::Display;
 use thiserror::Error;
 
 #[derive(Debug, Clone, Error)]
+/// TODO: write docs
 pub enum VersionError {}
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+/// TODO: write docs
 pub enum VersionType {
     /// Semantic version is a description version system that tracks the severity of changes so end
     /// users can make informed decisions about upgrading. The specification is avaiable at [SemVer.org](https://semver.org/)
     SemVer {
+        /// TODO: write docs
         major: i8,
+        /// TODO: write docs
         minor: i8,
+        /// TODO: write docs
         patch: i8,
+        /// TODO: write docs
         pre_release: Option<String>,
+        /// TODO: write docs
         build: Option<String>,
     },
+    /// TODO: write docs
     Uknown(String),
 }
 
@@ -45,17 +53,24 @@ impl Display for VersionType {
 }
 
 impl VersionType {
+    /// TODO: write docs
     pub fn parse(s: &'_ str) -> Result<VersionType> {
         Ok(VersionType::Uknown(s.to_owned()))
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+/// TODO: write docs
 pub enum Version {
+    /// TODO: write docs
     Latest,
+    /// TODO: write docs
     Specific(VersionType),
+    /// TODO: write docs
     Lts,
+    /// TODO: write docs
     Stable,
+    /// TODO: write docs
     PreRelease,
 }
 
@@ -72,6 +87,7 @@ impl Default for Version {
 }
 
 impl Version {
+    /// TODO: write docs
     pub fn parse(s: &str) -> Result<Version> {
         match s {
             "" => Ok(Version::Specific(VersionType::parse(s)?)),

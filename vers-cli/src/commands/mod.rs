@@ -33,6 +33,8 @@ pub enum CliSubCommands {
     /// List all tools and their current versions for the current environment
     #[structopt(aliases = &["ls"])]
     List(list::ListCmd),
+    // #[structopt(external_subcommand)]
+    // ExternalCommands(Vec<String>),
 }
 
 pub trait Runnable {

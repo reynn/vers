@@ -37,7 +37,7 @@ impl Default for ListOutputType {
 pub(crate) fn execute_list_command(
     args: &'_ ListCmd,
     environment: &'_ Environment,
-    cfg: &'_ Config,
+    _cfg: &'_ Config,
 ) -> Result<()> {
     let output_type: OutputType = args.clone().output.unwrap_or_default().into();
     log::info!("Listing in {:?} format", output_type);

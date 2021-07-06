@@ -13,12 +13,12 @@ pub struct InstallCmd {
 pub fn execute_install_cmd(
     cmd: &'_ InstallCmd,
     env: &'_ Environment,
-    cfg: &'_ Config,
+    _cfg: &'_ Config,
 ) -> Result<()> {
     let tool_name = &cmd.name;
     let version = &cmd.version.to_owned().unwrap_or_default();
     let tool = &Tool {
-        name: &tool_name,
+        name: tool_name.into(),
         version: Version::parse(&version)?,
     };
     vers_core::install_tool(&InstallToolOpts {

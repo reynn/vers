@@ -1,9 +1,9 @@
 mod cli;
-mod cmds;
+mod commands;
 mod errors;
 mod prelude;
 
-use crate::{cli::*, cmds::*};
+use crate::cli::*;
 use anyhow::Result;
 use log::*;
 use prelude::*;
@@ -30,39 +30,17 @@ fn main() -> Result<()> {
     // Load the configuration file
     let config: Config = cli.clone().into();
     info!("{:?}", &config);
-    let env_name = &cli.env_name.unwrap_or_else(|| "default".into());
-    let environment = Environment::find_env_by_name(env_name, &config.environment_directory)
+    let env_name = cli.clone().env_name.unwrap_or_default();
+    let environment = Environment::find_env_by_name(&env_name, &config.environment_directory)
         .unwrap_or_else(|e| {
             warn!(
-                "Environment, {}, doesn't exist, initializing default environment. [{}]",
+                "Environment, {}, doesn't exist, initializing environment. [{}]",
                 env_name, e
             );
             Default::default()
         });
 
     // Handle subcommand if provided
-    if let Some(subcommand) = cli.subcommand {
-        match subcommand {
-            CliSubCommands::Change(args) => {
-                change::execute_change_cmd(&args, &environment, &config)?
-            }
-            CliSubCommands::Config(args) => config::execute_config_cmd(&args, &config)?,
-            CliSubCommands::Environment(cmds) => {
-                env::execute_env_subcommand(&cmds.sub_cmd, &config)?
-            }
-            CliSubCommands::Install(args) => {
-                install::execute_install_cmd(&args, &environment, &config)?
-            }
-            CliSubCommands::Uninstall(args) => {
-                uninstall::execute_uninstall_cmd(&args, &environment, &config)?
-            }
-            CliSubCommands::List(args) => list::execute_list_command(&args, &environment, &config)?,
-            CliSubCommands::Completions(args) => {
-                completions::execute_completion_cmd(&args, &config)?
-            }
-        }
-    } else {
-        error!("No commands provided");
-    }
+    cli.handle_subcommand(&environment, &config)?;
     Ok(())
 }
