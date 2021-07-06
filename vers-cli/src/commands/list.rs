@@ -41,9 +41,5 @@ pub(crate) fn execute_list_command(
 ) -> Result<()> {
     let output_type: OutputType = args.clone().output.unwrap_or_default().into();
     log::info!("Listing in {:?} format", output_type);
-    vers_core::list_tools(&ListToolsOpts {
-        environment: &environment,
-        output_type: &output_type,
-    })?;
-    Ok(())
+    Ok(vers_core::list_tools(&environment, &output_type)?)
 }

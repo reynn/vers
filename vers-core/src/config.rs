@@ -22,9 +22,11 @@ impl Config {
     pub fn load<P: Into<PathBuf>>(file_path: Option<P>) -> Result<Self> {
         if let Some(file_path) = file_path {
             let file_path: PathBuf = file_path.into();
-            let config_file_contents = std::fs::read_to_string(file_path)
+            let config_file_contents = std::fs::read_to_string(&file_path)
                 .map_err(|e| VersCoreError::IoError(e.to_string()))?;
-            Ok(toml::from_str(&config_file_contents)?)
+            let mut config: Self = toml::from_str(&config_file_contents)?;
+            config.file_path = file_path;
+            Ok(config)
         } else {
             Err(VersCoreError::General(
                 "No filepath to a config file provided".into(),

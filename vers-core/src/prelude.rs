@@ -9,7 +9,7 @@ pub mod v1 {
         machine::{Details, DetailsError},
         tool::{Tool, ToolError},
         version::{Version, VersionError},
-        InstallToolOpts, ListToolsOpts, OutputType,
+        OutputType,
     };
     pub use log::*;
 }

@@ -38,21 +38,13 @@ pub mod version;
 
 use crate::prelude::*;
 
-/// TODO: write docs
-pub struct InstallToolOpts<'ito> {
-    /// TODO: write docs
-    pub tools: Vec<&'ito Tool>,
-    /// TODO: write docs
-    pub environment: &'ito Environment,
-}
-
 /// The logic to install a [`Tool`] into an [`Environment`]
-pub fn install_tool(opts: &InstallToolOpts) -> crate::errors::Result<()> {
-    for tool in &opts.tools {
-        info!(
-            "Installing tool {} into environment: {}",
-            tool, &opts.environment
-        );
+pub fn install_tool(
+    tools: Vec<&'_ Tool>,
+    environment: &'_ Environment,
+) -> crate::errors::Result<()> {
+    for tool in tools {
+        info!("Installing tool {} into environment: {}", tool, environment);
     }
     Ok(())
 }
@@ -72,23 +64,17 @@ pub fn update_tool(_opts: &UpdateToolOpts) -> crate::errors::Result<()> {
     Ok(())
 }
 
-/// TODO: write docs
-pub struct ChangeToolOpts<'c> {
-    /// TODO: write docs
-    pub environment: &'c Environment,
-    /// TODO: write docs
-    pub tool: &'c Tool,
-    /// TODO: write docs
-    pub version: Option<&'c Version>,
-}
-
 /// Update a [`Tool`] currently installed in an [`Environment`]
-pub fn change_tool_version(opts: &ChangeToolOpts) -> crate::errors::Result<()> {
-    let version = opts.version.unwrap_or(&Version::Latest);
-    let tool_name = opts.tool.clone().name;
+pub fn change_tool_version(
+    environment: &'_ Environment,
+    tool: &'_ str,
+    version: Option<&'_ Version>,
+) -> crate::errors::Result<()> {
+    let version = version.unwrap_or(&Version::Latest);
+    let tool_name = tool;
     info!(
         "Changing to version {} of {} in the {} environment",
-        version, tool_name, opts.environment
+        version, tool_name, environment
     );
     Ok(())
 }
@@ -104,23 +90,17 @@ pub enum OutputType {
     Text,
 }
 
-#[derive(Debug, Clone)]
 /// TODO: write docs
-pub struct ListToolsOpts<'lo> {
-    /// TODO: write docs
-    pub environment: &'lo Environment,
-    /// TODO: write docs
-    pub output_type: &'lo OutputType,
-}
-
-/// TODO: write docs
-pub fn list_tools(opts: &ListToolsOpts) -> crate::errors::Result<()> {
-    let tools = &opts.environment.tools();
+pub fn list_tools(
+    environment: &'_ Environment,
+    output_type: &'_ OutputType,
+) -> crate::errors::Result<()> {
+    let tools = environment.tools();
     if tools.is_empty() {
         println!("No tools are currently installed");
     } else {
         println!("--> There are currently {} tools installed", tools.len());
-        match opts.output_type {
+        match output_type {
             OutputType::Json => todo!(),
             OutputType::Yaml => todo!(),
             OutputType::Text => tools.iter().for_each(|f| println!("{}", f.name)),

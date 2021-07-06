@@ -21,9 +21,6 @@ pub fn execute_install_cmd(
         name: tool_name.into(),
         version: Version::parse(&version)?,
     };
-    vers_core::install_tool(&InstallToolOpts {
-        tools: vec![tool],
-        environment: env,
-    })?;
+    vers_core::install_tool(vec![tool], env)?;
     Ok(())
 }
