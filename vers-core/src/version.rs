@@ -25,7 +25,7 @@ pub enum VersionType {
         build: Option<String>,
     },
     /// TODO: write docs
-    Uknown(String),
+    Unknown(String),
 }
 
 impl Display for VersionType {
@@ -47,15 +47,15 @@ impl Display for VersionType {
                 }
                 write!(f, "({})", sem_ver)
             }
-            VersionType::Uknown(_) => todo!(),
+            VersionType::Unknown(_) => todo!(),
         }
     }
 }
 
 impl VersionType {
-    /// TODO: write docs
-    pub fn parse(s: &'_ str) -> Result<VersionType> {
-        Ok(VersionType::Uknown(s.to_owned()))
+    /// Parse input into a VersionType
+    pub fn parse<S: Into<String>>(s: S) -> Result<VersionType> {
+        Ok(VersionType::Unknown(s.into()))
     }
 }
 
@@ -104,6 +104,14 @@ mod tests {
     fn test_semver_parse() {
         let v = Version::parse("0.1.0-alpha+fd3f4b7a5a331a2384ed13fb3ead44e975438c3b")
             .expect("Semver parse failed");
-        dbg!(v);
+        dbg!(&v);
+        let t = Version::Specific(VersionType::SemVer {
+            major: 0,
+            minor: 1,
+            patch: 0,
+            pre_release: Some("alpha".into()),
+            build: Some("fd3f4b7a5a331a2384ed13fb3ead44e975438c3b".into()),
+        });
+        assert_eq!(&v, &t);
     }
 }

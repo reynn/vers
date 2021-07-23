@@ -35,9 +35,15 @@ prae::define! {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, Error, PartialEq)]
 /// TODO: write docs
 pub struct EnvironmentDirectoryError;
+
+impl Display for EnvironmentDirectoryError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
+    }
+}
 
 prae::define! {
     pub EnvironmentDirectory: PathBuf
@@ -55,6 +61,11 @@ prae::define! {
     }
 }
 
+pub fn default_environment_directory() -> Result<EnvironmentDirectory> {
+    let env_dir = crate::dirs::get_default_data_dir().unwrap().join("envs");
+    EnvironmentDirectory::new(env_dir).map_err(|e| EnvironmentError::General(format!("{:?}", e)))
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// TODO: write docs
 pub struct Environment {
@@ -63,11 +74,12 @@ pub struct Environment {
     /// A set of tools that live as long as the environment.
     tools: Vec<Tool>,
     /// The directory where the environment is located.
-    directory: PathBuf,
+    directory: EnvironmentDirectory,
 }
 
 impl Drop for Environment {
     fn drop(&mut self) {
+        log::debug!("Saving environment [{}] config", self.name.get());
         self.save().unwrap();
     }
 }
@@ -92,18 +104,13 @@ impl Environment {
         Ok(Self {
             name: EnvironmentName::new(name)?,
             tools: Vec::new(),
-            directory: base_path.into(),
+            directory: EnvironmentDirectory::new(base_path.into().join("envs").join(name))?,
         })
     }
 
     /// Provide the directory where the environment is located.
     pub fn directory(&self) -> String {
-        self.directory
-            .join("envs")
-            .join(self.name.get())
-            .to_str()
-            .unwrap_or_default()
-            .into()
+        self.directory.to_str().unwrap_or_default().into()
     }
 
     /// Load or create an environment
@@ -143,7 +150,6 @@ impl Environment {
             let entry = entry?;
             let path = entry.path();
             debug!("Environment directory entry: {:?}", &path);
-
             let metadata = metadata(path)?;
             debug!("{:?}", metadata);
         }
@@ -153,28 +159,12 @@ impl Environment {
     /// Find a tool by name in the environment.
     pub fn find_tool_by_name(&self, name: &'_ str) -> Option<Tool> {
         for tool in self.tools() {
-            if tool.name == name.to_string() {
+            if tool.name.eq(name) {
                 return Some(tool);
             }
         }
         None
     }
-
-    // /// TODO: write docs
-    // pub fn find_tool_by_name<S: Into<String>>(&self, tool_name: S) -> Result<Tool> {
-    //     let tool_name: String = tool_name.into();
-
-    //     info!("Searching for {} in {:?}", tool_name, &self.directory);
-
-    //     Err(EnvironmentError::ToolNotFoundInEnvironment(
-    //         tool_name,
-    //         self.directory
-    //             .as_path()
-    //             .to_str()
-    //             .unwrap_or("invalid-path")
-    //             .into(),
-    //     ))
-    // }
 
     /// Returns a list of all tools installed in the environment.
     pub fn tools(&self) -> Vec<Tool> {

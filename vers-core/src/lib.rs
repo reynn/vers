@@ -20,7 +20,9 @@ pub mod archive;
 pub mod asset;
 /// TODO: write docs
 pub mod config;
-/// Environments help group usable tools together, this can be helpful for workflows where you need to keep
+/// TODO: write docs
+pub mod dirs;
+/// Environments group usable tools together, this can be helpful for workflows where you need to keep
 /// mutlple versions of the same tool, for instance multiple different versions of `kubectl` to connect to
 /// legacy clusters and new clusters
 pub mod environment;
@@ -49,22 +51,17 @@ pub fn install_tool(
     Ok(())
 }
 
-/// TODO: write docs
-pub struct UpdateToolOpts<'uto> {
-    /// TODO: write docs
-    pub environment: &'uto Environment,
-    /// TODO: write docs
-    pub tool: &'uto Tool,
-    /// TODO: write docs
-    pub version: Option<&'uto Version>,
-}
-
-/// Update a [`Tool`] currently installed in an [`Environment`]
-pub fn update_tool(_opts: &UpdateToolOpts) -> crate::errors::Result<()> {
+/// Update a [`Tool`] currently installed in an [`Environment`] to the latest version, can also be used to install a specific version
+pub fn update_tool(
+    _environment: &'_ Environment,
+    _tool: &'_ Tool,
+    version: Option<&'_ Version>,
+) -> crate::errors::Result<()> {
+    debug!("{:?}", version);
     Ok(())
 }
 
-/// Update a [`Tool`] currently installed in an [`Environment`]
+/// Change a [`Tool`] currently installed in an [`Environment`] to a different installed version.
 pub fn change_tool_version(
     environment: &'_ Environment,
     tool: &'_ str,
@@ -80,17 +77,24 @@ pub fn change_tool_version(
 }
 
 #[derive(Debug, Clone)]
-/// TODO: write docs
+/// Control what is printed to stdout for certain subcommands
 pub enum OutputType {
-    /// TODO: write docs
+    /// Output to stdout in JSON format
     Json,
-    /// TODO: write docs
+    /// Outputs to stdout in YAML format
     Yaml,
-    /// TODO: write docs
+    /// Output as regular text, this is the default output type.
     Text,
 }
 
-/// TODO: write docs
+impl Default for OutputType {
+    fn default() -> OutputType {
+        OutputType::Text
+    }
+}
+
+/// List [`Tool`]s currently installed in an [`Environment`], able to provide an [`OutputType`]
+/// to control what is printed to stdout
 pub fn list_tools(
     environment: &'_ Environment,
     output_type: &'_ OutputType,

@@ -1,7 +1,6 @@
-use prae::ValidationError;
 use thiserror::Error;
 
-use crate::environment::EnvironmentNameError;
+use crate::environment::{EnvironmentDirectoryError, EnvironmentNameError};
 
 /// TODO: write docs
 pub type Result<T, E = EnvironmentError> = std::result::Result<T, E>;
@@ -27,9 +26,8 @@ pub enum EnvironmentError {
     #[error("There was a problem with the provided name of environment {0}")]
     /// TODO: write docs
     EnvironmentNameFailure(#[from] EnvironmentNameError),
-    #[error("Environment directory validation failed: {0}")]
-    /// TODO: write docs
-    EnvironmentDirectoryFail(#[from] ValidationError),
+    #[error("There was a problem with the provided directory of environment {0}")]
+    EnvironmentDirectoryFailure(#[from] EnvironmentDirectoryError),
     #[error("Tool {0} not found in the {1} environment")]
     /// TODO: write docs
     ToolNotFoundInEnvironment(String, String),

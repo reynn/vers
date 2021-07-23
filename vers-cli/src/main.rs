@@ -9,7 +9,15 @@ use log::*;
 use prelude::*;
 use simplelog::{ColorChoice, CombinedLogger, Config as log_cfg, TermLogger, TerminalMode};
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
+    if let Err(run_err) = run().await {
+        eprintln!("Failed to run app logic {:?}", run_err);
+    };
+    Ok(())
+}
+
+async fn run() ->Result<()> {
     // Parse CLI arguments
     let cli = Cli::new()?;
     info!("{:?}", cli);
@@ -34,7 +42,7 @@ fn main() -> Result<()> {
     let environment = Environment::find_env_by_name(&env_name, &config.environment_directory)
         .unwrap_or_else(|e| {
             warn!(
-                "Environment, {}, doesn't exist, initializing environment. [{}]",
+                "Environment, {}, doesn't exist, creating new [{}]",
                 env_name, e
             );
             Default::default()
