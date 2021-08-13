@@ -9,9 +9,9 @@ pub struct UninstallCmd {
 }
 
 pub(crate) fn execute_uninstall_cmd(
-    args: &'_ UninstallCmd,
-    env: &'_ Environment,
-    cfg: &'_ Config,
+    _args: &'_ UninstallCmd,
+    _env: &'_ Environment,
+    _cfg: &'_ Config,
 ) -> Result<()> {
     Ok(())
 }

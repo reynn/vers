@@ -43,23 +43,23 @@ impl Cli {
             match subcommand {
                 CliSubCommands::Change(args) => change::execute_change_cmd(&args, &env, &cfg)?,
                 CliSubCommands::Config(args) => config::execute_config_cmd(&args, &cfg)?,
-                CliSubCommands::Environment(cmds) => {
-                    env::execute_env_subcommand(&cmds.sub_cmd, &cfg)?
-                }
+                CliSubCommands::Environment(cmds) => env::execute_env_subcommand(&cmds.sub_cmd, &cfg)?,
                 CliSubCommands::Install(args) => install::execute_install_cmd(&args, &env, &cfg)?,
-                CliSubCommands::Uninstall(args) => {
-                    uninstall::execute_uninstall_cmd(&args, &env, &cfg)?
-                }
+                CliSubCommands::Uninstall(args) => uninstall::execute_uninstall_cmd(&args, &env, &cfg)?,
                 CliSubCommands::List(args) => list::execute_list_command(&args, &env, &cfg)?,
-                CliSubCommands::Completions(args) => {
-                    completions::execute_completion_cmd(&args, &cfg)?
-                }
+                CliSubCommands::Completions(args) => completions::execute_completion_cmd(&args, &cfg)?,
+                CliSubCommands::ExternalCommands(cmd_names) => handle_external_commands(cmd_names, &cfg)?,
             }
         } else {
             log::error!("No commands provided");
         }
         Ok(())
     }
+}
+
+fn handle_external_commands(cmd_names: &Vec<String>, cfg: &'_ Config) -> Result<()> {
+    debug!("Names: {:?}", cmd_names);
+    Ok(())
 }
 
 impl From<Cli> for Config {
