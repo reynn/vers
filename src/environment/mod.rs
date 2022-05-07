@@ -126,7 +126,7 @@ impl Environment {
                         if let Some(bin_file) = find_binary(&tool_version_dir, alias) {
                             create_symlink(
                                 &bin_file.into_path(),
-                                &Path::new(&self.base_dir).join(alias).to_path_buf(),
+                                &Path::new(&self.base_dir).join(alias),
                             )
                         } else {
                             eyre::bail!(
@@ -138,7 +138,10 @@ impl Environment {
 
                         match self.tools.iter_mut().find(|t| t.name == name) {
                             // add to the tools list
-                            Some(installed_tool) => Ok(installed_tool.set_current_version(version)),
+                            Some(installed_tool) => {
+                                installed_tool.set_current_version(version);
+                                Ok(())
+                            }
                             // create a new tool, and add to our list
                             None => {
                                 let tool = Tool::new(name, alias, &version);
@@ -162,21 +165,23 @@ impl Environment {
     }
 }
 
-fn create_symlink(src: &'_ PathBuf, dest: &'_ PathBuf) {
+fn create_symlink(src: &'_ Path, dest: &'_ Path) {
     match std::env::consts::OS {
         "windows" => unimplemented!(),
         "linux" | "macos" => {
-            match std::fs::read_link(dest) {
-                Ok(read_link) => {
-                    if *read_link != *dest {
-                        // delete the symlink if it isn't pointing to the same file we are trying
-                        // to use
-                        info!("Removing existing symlink pointing at {:?}", read_link);
-                        std::fs::remove_file(dest).unwrap()
+            if dest.exists() {
+                match std::fs::read_link(dest) {
+                    Ok(read_link) => {
+                        if *read_link != *dest {
+                            // delete the symlink if it isn't pointing to the same file we are trying
+                            // to use
+                            info!("Removing existing symlink pointing at {:?}", read_link);
+                            std::fs::remove_file(dest).unwrap()
+                        }
                     }
-                }
-                Err(read_err) => panic!("Failed to read symlink. {:?}", read_err),
-            };
+                    Err(read_err) => panic!("Failed to read symlink. {:?}", read_err),
+                };
+            }
             std::fs::create_dir_all(dest.parent().unwrap()).unwrap();
             info!("Creating symlink from {:?} to {:?}", src, dest);
             std::os::unix::fs::symlink(src, dest).unwrap()

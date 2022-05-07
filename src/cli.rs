@@ -130,7 +130,7 @@ pub async fn add_new_tool(
     let split_org_repo: Vec<&str> = org_repo.split('/').collect();
     let owner = split_org_repo[0];
     let repo = split_org_repo[1];
-    let alias = alias.unwrap_or(repo.to_string());
+    let alias = alias.unwrap_or_else(|| repo.to_string());
 
     let versions: Vec<String> = if split_name.len() > 1 {
         vec![split_name[1].to_string()]
@@ -156,7 +156,7 @@ pub async fn add_new_tool(
                     .map(|item| item.text().to_string())
                     .collect()
             })
-            .unwrap_or_else(|| Vec::new())
+            .unwrap_or_default()
         } else {
             vec![versions.get(0).unwrap().to_string()]
         }
