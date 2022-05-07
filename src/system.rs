@@ -32,6 +32,12 @@ impl System {
         let os_regex = self.os.get_match_regex();
         let arch_regex = self.architecture.get_match_regex();
 
+        log::debug!(
+            "System OS Regex[{}], Arch Regex[{}], matching {}",
+            os_regex.to_string(),
+            arch_regex.to_string(),
+            s
+        );
         os_regex.is_match(s) && arch_regex.is_match(s)
     }
 }

@@ -1,4 +1,5 @@
 use {
+    super::Result,
     crate::{
         environment::Environment,
         github,
@@ -7,6 +8,11 @@ use {
     },
     bpaf::*,
     log::*,
+    skim::{
+        prelude::{SkimItemReader, SkimOptionsBuilder},
+        Selector, Skim, SkimItem, SkimOptions,
+    },
+    std::{io::Cursor, sync::Arc},
 };
 
 #[derive(Debug, Clone, Bpaf)]
@@ -54,6 +60,9 @@ pub enum Actions {
         /// Allow install of pre-release versions of the tool
         #[bpaf(short, long, fallback(false))]
         pre_release: bool,
+        /// Show available versions
+        #[bpaf(short, long, fallback(false))]
+        show: bool,
     },
     /// Remove a tool from the designated environment
     #[bpaf(command("remove"))]
@@ -75,6 +84,22 @@ pub enum Actions {
         #[bpaf(short, long, fallback(false))]
         current: bool,
     },
+    /// Update tools to the latest version
+    #[bpaf(command("update"))]
+    Update {
+        #[bpaf(short, long, fallback(false))]
+        all: bool,
+        #[bpaf(short, long)]
+        name: Option<String>,
+    },
+    /// show the exports required for setup
+    #[bpaf(command("env"))]
+    Env {
+        #[bpaf(short, long)]
+        name: Option<String>,
+        #[bpaf(short, long)]
+        shell: String,
+    },
 }
 
 fn verbose() -> Parser<usize> {
@@ -92,9 +117,11 @@ pub async fn add_new_tool(
     system: &'_ System,
     env: &mut Environment,
     user_pattern: Option<String>,
-) -> super::Result<()> {
+    alias: Option<String>,
+    show: bool,
+) -> Result<()> {
     let split_name: Vec<&str> = name.split('@').collect();
-    debug!("Split: {:?}. Length: {}", split_name, split_name.len());
+    trace!("Split: {:?}. Length: {}", split_name, split_name.len());
     let org_repo = if split_name.len() > 1 {
         split_name[0]
     } else {
@@ -103,34 +130,62 @@ pub async fn add_new_tool(
     let split_org_repo: Vec<&str> = org_repo.split('/').collect();
     let owner = split_org_repo[0];
     let repo = split_org_repo[1];
+    let alias = alias.unwrap_or(repo.to_string());
 
-    let version = if split_name.len() > 1 {
-        parse_version(split_name[1]).unwrap()
+    let versions: Vec<String> = if split_name.len() > 1 {
+        vec![split_name[1].to_string()]
     } else {
-        github::get_latest_release_tag(owner, repo).await?
+        let versions = github::get_repo_releases(owner, repo).await.unwrap();
+
+        if show {
+            let item_reader =
+                SkimItemReader::default().of_bufread(Cursor::new(versions.join("\n")));
+            Skim::run_with(
+                &SkimOptionsBuilder::default()
+                    .height(Some("75%"))
+                    .multi(true)
+                    .reverse(true)
+                    .build()
+                    .unwrap(),
+                Some(item_reader),
+            )
+            .map(|items| {
+                items
+                    .selected_items
+                    .iter()
+                    .map(|item| item.text().to_string())
+                    .collect()
+            })
+            .unwrap_or_else(|| Vec::new())
+        } else {
+            vec![versions.get(0).unwrap().to_string()]
+        }
     };
 
-    info!("Installing {} version {}", org_repo, version);
+    for version in versions.iter() {
+        info!("Installing {} version {}", org_repo, version);
 
-    let release = github::get_specific_release_for_repo(owner, repo, &version, system).await?;
+        let parsed_version = parse_version(version);
+        let release =
+            github::get_specific_release_for_repo(owner, repo, &parsed_version, system).await?;
 
-    match github::get_platform_specific_asset(&release, system, user_pattern) {
-        Some(asset) => match env.add_tool(org_repo, version, asset).await {
-            Ok(_) => info!("Successfully added {} to the environment", name),
-            Err(err) => error!("Error adding tool to the environment. {:?}", err),
-        },
-        None => error!("No assets found for this OS and architecture combo"),
+        match github::get_platform_specific_asset(&release, system, user_pattern.clone()) {
+            Some(asset) => match env.add_tool(org_repo, &alias, parsed_version, asset).await {
+                Ok(_) => info!("Successfully added {} to the environment", name),
+                Err(err) => error!("Error adding tool to the environment. {:?}", err),
+            },
+            None => error!("No assets found for this OS and architecture combo"),
+        }
     }
-
     Ok(())
 }
 
-pub async fn remove_tool(name: &'_ str, env: &'_ Environment) -> super::Result<()> {
+pub async fn remove_tool(name: &'_ str, env: &'_ Environment) -> Result<()> {
     info!("Removing {} from environment. {:?}", name, env);
     Ok(())
 }
 
-pub async fn list_tools(env: &'_ crate::environment::Environment) -> super::Result<()> {
+pub async fn list_tools(env: &'_ Environment) -> Result<()> {
     info!("Listing all tools available. {:?}", env);
     let tools = &env.tools;
     if !tools.is_empty() {
@@ -141,5 +196,23 @@ pub async fn list_tools(env: &'_ crate::environment::Environment) -> super::Resu
             env.name
         );
     }
+    Ok(())
+}
+
+pub enum UpdateType {
+    All,
+    Specific(String),
+}
+
+pub async fn update_tools(env: &'_ Environment, update_type: UpdateType) -> Result<()> {
+    match update_type {
+        UpdateType::All => {
+            for tool in env.tools.iter() {
+                info!("Updating tool {}", tool.name);
+            }
+        }
+        UpdateType::Specific(tool_name) => todo!(),
+    };
+
     Ok(())
 }

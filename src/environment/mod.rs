@@ -1,8 +1,5 @@
-mod global;
-mod local;
-
 use {
-    crate::{download, shell, tool::Tool, version::Version},
+    crate::{archiver, download, shell, tool::Tool, version::Version},
     directories_next::ProjectDirs,
     log::*,
     octocrab::models::repos::Asset,
@@ -13,6 +10,7 @@ use {
         process::exit,
     },
     tokio::{fs::read_to_string, task::futures},
+    walkdir::{DirEntry, WalkDir},
 };
 
 pub trait Env {
@@ -21,7 +19,7 @@ pub trait Env {
     fn change_tool_version(&self, name: &'_ str, new_version: &'_ Version) -> crate::Result<()>;
 }
 
-#[derive(Debug, Serialize, Default, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Environment {
     pub name: String,
     #[serde(skip)]
@@ -46,9 +44,10 @@ impl Environment {
             match std::fs::create_dir_all(&env_dir) {
                 Ok(_) => {}
                 Err(create_dir_err) => {
-                    return Err(
-                        format!("Unable to create the envs directory: {}", create_dir_err).into(),
-                    )
+                    eyre::bail!(format!(
+                        "Unable to create the envs directory: {}",
+                        create_dir_err
+                    ))
                 }
             }
         }
@@ -63,45 +62,35 @@ impl Environment {
                         .to_string();
                     Ok(res)
                 }
-                Err(serde_err) => Err(format!("{:?}", serde_err).into()),
+                Err(serde_err) => eyre::bail!(serde_err),
             },
             Err(read_err) => match read_err.kind() {
                 std::io::ErrorKind::NotFound => {
                     debug!("Environment file does not exist");
-                    Environment {
+                    Ok(Environment {
                         name: name.to_string(),
-                        base_dir: env_dir.to_str().unwrap_or_default().to_string(),
+                        base_dir: env_dir.join(name).to_str().unwrap_or_default().to_string(),
                         tools: Vec::new(),
-                    }
-                    .save()
-                    .await
+                    })
                 }
-                _ => Err(format!(
+                _ => eyre::bail!(format!(
                     "Failed to read contents from file {:?}. {}",
                     env_path, read_err
-                )
-                .into()),
+                )),
             },
         }
-    }
-
-    pub async fn save(self) -> crate::Result<Self> {
-        let out_file = Path::new(&self.base_dir)
-            .parent()
-            .unwrap()
-            .join(format!("{}.json", &self.name));
-        debug!("Writing {} environment file to {:?}", &self.name, out_file);
-        tokio::fs::write(out_file, to_string_pretty(&self)?).await?;
-        Ok(self)
     }
 
     pub async fn add_tool(
         &mut self,
         name: &'_ str,
+        alias: &'_ str,
         version: Version,
         asset: Asset,
     ) -> crate::Result<()> {
         let tool_dir = Path::new(&self.base_dir)
+            .parent()
+            .unwrap()
             .parent()
             .unwrap()
             .join("tools")
@@ -112,24 +101,95 @@ impl Environment {
             "Tag: {} | tool_version_dir: {:?}",
             version_tag, &tool_version_dir
         );
-        match download::download_asset(&asset, tool_version_dir).await {
+        match download::download_asset(&asset, &tool_version_dir).await {
             Ok(asset_path) => {
                 log::info!(
                     "Download of asset {} completed.",
                     asset.browser_download_url
                 );
                 // extract file
-                // add to the tools list
-                if let Some(installed_tool) = self.tools.iter_mut().find(|t| t.name == name) {
-                    installed_tool.set_current_version(version)
+                let extractor = archiver::determine_extractor(&asset_path).unwrap();
+
+                match archiver::handle_file_extraction(
+                    extractor,
+                    &asset_path,
+                    Some(tool_version_dir.clone()),
+                )
+                .await
+                {
+                    Ok(_) => {
+                        info!(
+                            "Extracted file {}",
+                            &asset_path.to_str().unwrap_or_default()
+                        );
+
+                        if let Some(bin_file) = find_binary(&tool_version_dir, alias) {
+                            create_symlink(
+                                &bin_file.into_path(),
+                                &Path::new(&self.base_dir).join(alias).to_path_buf(),
+                            )
+                        } else {
+                            eyre::bail!(
+                                "Could not find a binary named '{}' in {:?}",
+                                alias,
+                                tool_version_dir
+                            )
+                        }
+
+                        match self.tools.iter_mut().find(|t| t.name == name) {
+                            // add to the tools list
+                            Some(installed_tool) => Ok(installed_tool.set_current_version(version)),
+                            // create a new tool, and add to our list
+                            None => {
+                                let tool = Tool::new(name, alias, &version);
+                                self.tools.push(tool);
+                                Ok(())
+                            }
+                        }
+                    }
+                    Err(extract_err) => Err(extract_err),
                 }
             }
-            Err(download_err) => log::error!(
-                "Failed to download file {} from {}",
-                asset.name,
-                asset.browser_download_url
-            ),
+            Err(download_err) => {
+                log::error!(
+                    "Failed to download file {} from {}",
+                    asset.name,
+                    asset.browser_download_url
+                );
+                Err(download_err)
+            }
         }
-        Ok(())
     }
+}
+
+fn create_symlink(src: &'_ PathBuf, dest: &'_ PathBuf) {
+    match std::env::consts::OS {
+        "windows" => unimplemented!(),
+        "linux" | "macos" => {
+            match std::fs::read_link(dest) {
+                Ok(read_link) => {
+                    if *read_link != *dest {
+                        // delete the symlink if it isn't pointing to the same file we are trying
+                        // to use
+                        info!("Removing existing symlink pointing at {:?}", read_link);
+                        std::fs::remove_file(dest).unwrap()
+                    }
+                }
+                Err(read_err) => panic!("Failed to read symlink. {:?}", read_err),
+            };
+            std::fs::create_dir_all(dest.parent().unwrap()).unwrap();
+            info!("Creating symlink from {:?} to {:?}", src, dest);
+            std::os::unix::fs::symlink(src, dest).unwrap()
+        }
+        _ => panic!("unknown operating system"),
+    }
+    // std::fs::soft_link(src, dest).unwrap();
+    // if std::os::unix::fs::symlink
+}
+
+fn find_binary(folder: &'_ Path, bin_name: &'_ str) -> Option<DirEntry> {
+    WalkDir::new(folder)
+        .into_iter()
+        .filter_map(Result::ok)
+        .find(|entry| entry.file_name() == bin_name)
 }

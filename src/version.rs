@@ -2,6 +2,7 @@ use {
     log::info,
     once_cell::sync::Lazy,
     regex::Regex,
+    semver::{BuildMetadata, Prerelease},
     serde::{Deserialize, Serialize},
     std::fmt::Display,
 };
@@ -10,18 +11,12 @@ static SEMVER_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r#"^(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)(?P<pre_release>-[a-zA-Z\d][-a-zA-Z.\d]*)?(?P<metadata>\+[a-zA-Z\d][-a-zA-Z.\d]*)?$"#).expect("Unable to compile regex for Semantic Versioning")
 });
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Version {
     /// The latest version of a tool as determined by the tool managers
     Latest,
     /// SemVer should follow the patterns outlined at [SemVer.org](https://semver.org/)
-    SemVer {
-        major: usize,
-        minor: usize,
-        patch: usize,
-        metadata: Option<String>,
-        pre_release: Option<String>,
-    },
+    SemVer(semver::Version),
     /// LTS is not available for all tool managers, this will be a version that isn't the latest but is supported longer than a typical release.
     Lts,
     /// Stable often times is synonymous with Latest however this will ensure that the version is considered stable before installing.
@@ -30,25 +25,16 @@ pub enum Version {
     PreRelease,
 }
 
+impl Default for Version {
+    fn default() -> Self {
+        Self::Latest
+    }
+}
+
 impl Version {
     pub fn as_tag(&self) -> String {
         match self {
-            Version::SemVer {
-                major,
-                minor,
-                patch,
-                metadata,
-                pre_release,
-            } => {
-                let mut v = format!("v{major}.{minor}.{patch}");
-                if let Some(metadata) = metadata {
-                    v += format!("-{}", metadata).as_str();
-                }
-                if let Some(pre_release) = pre_release {
-                    v += format!("+{}", pre_release).as_str();
-                }
-                v
-            }
+            Version::SemVer(v) => v.to_string(),
             Version::Latest => "latest".to_string(),
             Version::Lts => "lts".to_string(),
             Version::Stable => "stable".to_string(),
@@ -63,71 +49,76 @@ impl Display for Version {
     }
 }
 
-pub fn parse_version(provided_version: &'_ str) -> super::Result<Version> {
-    let provided_version = provided_version.strip_prefix('v').unwrap();
-    info!("Parsing version: {:?}", provided_version);
-    if let Some(captures) = SEMVER_REGEX.captures(provided_version) {
-        Ok(Version::SemVer {
-            major: captures.name("major").unwrap().as_str().parse().unwrap(),
-            minor: captures.name("minor").unwrap().as_str().parse().unwrap(),
-            patch: captures.name("patch").unwrap().as_str().parse().unwrap(),
-            metadata: if let Some(metadata) = captures.name("metadata") {
-                Some(metadata.as_str()[1..].to_string())
+pub fn parse_version(provided_version: &'_ str) -> Version {
+    match provided_version.to_lowercase().as_str() {
+        "latest" => Version::Latest,
+        "stable" => Version::Stable,
+        "lts" => Version::Lts,
+        "prerelease" | "pre-release" => Version::PreRelease,
+        _ => {
+            let provided_version = provided_version.trim_start_matches('v');
+            log::info!("Parsing version: {}", provided_version);
+            if let Ok(parsed_semver) = semver::Version::parse(provided_version) {
+                Version::SemVer(parsed_semver)
             } else {
-                None
-            },
-            pre_release: if let Some(pre_release) = captures.name("pre_release") {
-                Some(pre_release.as_str()[1..].to_string())
-            } else {
-                None
-            },
-        })
-    } else {
-        Ok(Version::Latest)
+                Version::Latest
+            }
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use {super::*, test_case::test_case};
 
-    #[test]
-    fn test_semver_parse_with_metadata_and_prerelease() {
-        assert_eq!(
-            parse_version("0.1.0-alpha+fd3f4b7a5a331a2384ed13fb3ead44e975438c3b").unwrap(),
-            Version::SemVer {
-                major: 0,
-                minor: 1,
-                patch: 0,
-                pre_release: Some("alpha".into()),
-                metadata: Some("fd3f4b7a5a331a2384ed13fb3ead44e975438c3b".into()),
-            }
-        );
+    #[test_case("laTeST", Version::Latest ; "Latest: mixed cases")]
+    #[test_case("LATEST", Version::Latest ; "Latest: all uppercase")]
+    #[test_case("latest", Version::Latest ; "Latest: all lowercase")]
+    #[test_case("LtS", Version::Lts ; "LTS: mixed cases")]
+    #[test_case("LTS", Version::Lts ; "LTS: all uppercase")]
+    #[test_case("lts", Version::Lts ; "LTS: all lowercase")]
+    #[test_case("PrEREleASe", Version::PreRelease ; "PreRelease: mixed case")]
+    #[test_case("PRERELEASE", Version::PreRelease ; "PreRelease: all uppercase")]
+    #[test_case("PreRelease", Version::PreRelease ; "PreRelease: all lowercase")]
+    #[test_case("stABLe", Version::Stable ; "Stable: mixed case")]
+    #[test_case("STABLE", Version::Stable ; "Stable: all uppercase")]
+    #[test_case("stable", Version::Stable ; "Stable: all lowercase")]
+    #[test_case("0.0.0",
+                Version::SemVer(semver::Version{ major: 0, minor: 0, patch: 0, pre: Prerelease::EMPTY, build: BuildMetadata::EMPTY });
+                "SemVer: 0.0.0 without prelease or metadata")]
+    #[test_case("1.0.0",
+                Version::SemVer(semver::Version{ major: 1, minor: 0, patch: 0, pre: Prerelease::EMPTY, build: BuildMetadata::EMPTY });
+                "SemVer: 1.0.0 without prelease or metadata")]
+    #[test_case("0.1.0-alpha+fd3f4b7a5a331a2384ed13fb3ead44e975438c3b",
+                Version::SemVer(semver::Version{ major: 0, minor: 1, patch: 0, pre: Prerelease::new("alpha").unwrap(), build: BuildMetadata::new("fd3f4b7a5a331a2384ed13fb3ead44e975438c3b").unwrap() });
+                "SemVer: with prelease and metadata")]
+    #[test_case("2.10.0-alpha",
+                Version::SemVer(semver::Version{ major: 2, minor: 10, patch: 0, pre: Prerelease::new("alpha").unwrap(), build: BuildMetadata::EMPTY });
+                "SemVer: with prelease")]
+    #[test_case("3.2.1+fd3f4b7a5a331a2384ed13fb3ead44e975438c3b",
+                Version::SemVer(semver::Version{ major: 3, minor: 2, patch: 1, pre: Prerelease::EMPTY, build: BuildMetadata::new("fd3f4b7a5a331a2384ed13fb3ead44e975438c3b").unwrap() });
+                "SemVer: with metadata")]
+    fn parse_version_testing(input: &'_ str, expected: Version) {
+        assert_eq!(parse_version(input), expected)
     }
-    #[test]
-    fn test_semver_parse_with_metadata() {
-        assert_eq!(
-            parse_version("1.3.5+2022-04-20").unwrap(),
-            Version::SemVer {
-                major: 1,
-                minor: 3,
-                patch: 5,
-                metadata: Some("2022-04-20".to_string()),
-                pre_release: None,
-            }
-        );
-    }
-    #[test]
-    fn test_semver_parse_with_prerelease() {
-        assert_eq!(
-            parse_version("3.3.3-alpha").unwrap(),
-            Version::SemVer {
-                major: 3,
-                minor: 3,
-                patch: 3,
-                metadata: None,
-                pre_release: Some("alpha".to_string())
-            }
-        );
+
+    #[test_case(Version::Latest, "latest" ; "Latest tag")]
+    #[test_case(Version::Stable, "stable" ; "Stable tag")]
+    #[test_case(Version::Lts, "lts" ; "LTS tag")]
+    #[test_case(Version::PreRelease, "pre-release" ; "PreRelease tag")]
+    #[test_case(Version::SemVer(semver::Version{
+        major: 3, minor: 0, patch: 7, pre: Prerelease::new("rc2").unwrap(), build: BuildMetadata::EMPTY
+    }), "3.0.7-rc2" ; "SemVer: pre-release")]
+    #[test_case(Version::SemVer(semver::Version{
+        major: 1, minor: 0, patch: 0, pre: Prerelease::EMPTY, build: BuildMetadata::EMPTY
+    }), "1.0.0" ; "SemVer: simple")]
+    #[test_case(Version::SemVer(semver::Version{
+        major: 0, minor: 1, patch: 0, pre: Prerelease::new("beta").unwrap(), build: BuildMetadata::new("0d4ef68a70ae20c3178a0b6321dcf6538895346c").unwrap()
+    }), "0.1.0-beta+0d4ef68a70ae20c3178a0b6321dcf6538895346c" ; "SemVer: pre-release and metadata")]
+    #[test_case(Version::SemVer(semver::Version{
+        major: 3, minor: 10, patch: 0, pre: Prerelease::EMPTY, build: BuildMetadata::new("0d4ef68a70ae20c3178a0b6321dcf6538895346c").unwrap()
+    }), "3.10.0+0d4ef68a70ae20c3178a0b6321dcf6538895346c" ; "SemVer: metadata")]
+    fn as_tag_tests(input: Version, expected: &'_ str) {
+        assert_eq!(input.as_tag(), expected)
     }
 }

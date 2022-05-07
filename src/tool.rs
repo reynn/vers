@@ -9,27 +9,43 @@ use {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Tool {
     pub name: String,
+    pub alias: String,
+    #[serde(skip)]
     pub current_version: Version,
+    #[serde(skip)]
     pub installed_versions: Vec<Version>,
+    #[serde(skip)]
     pub known_versions: Vec<Version>,
 }
 
 impl Tool {
+    pub fn new(name: &'_ str, alias: &'_ str, version: &'_ Version) -> Self {
+        Self {
+            name: name.to_string(),
+            current_version: version.clone(),
+            installed_versions: vec![version.clone()],
+            known_versions: vec![version.clone()],
+            alias: alias.to_string(),
+        }
+    }
+
     pub async fn get(env: &'_ Environment, name: &'_ str) -> crate::Result<Self> {
         let tool_path = Path::new(&env.base_dir).join("..").join("tools");
         if !tool_path.exists() {
-            return Err("no tools installed in the current environment".into());
+            eyre::bail!("no tools installed in the current environment");
         }
 
         match read_to_string(tool_path.join(format!("{}.json", name))).await {
-            Ok(file_contents) => {
-                from_str(&file_contents).map_err(|serde_err| format!("{}", serde_err).into())
-            }
+            Ok(file_contents) => match from_str(&file_contents) {
+                Ok(s) => Ok(s),
+                Err(e) => eyre::bail!(e),
+            },
             Err(read_err) => match read_err.kind() {
-                std::io::ErrorKind::NotFound => {
-                    Err(format!("No versions of {} are installed in {}", name, env.name).into())
-                }
-                _ => Err(format!("Unable to load {}.json: {}", name, read_err).into()),
+                std::io::ErrorKind::NotFound => eyre::bail!(format!(
+                    "No versions of {} are installed in {}",
+                    name, env.name
+                )),
+                _ => eyre::bail!(format!("Unable to load {}.json: {}", name, read_err)),
             },
         }
     }

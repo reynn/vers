@@ -21,7 +21,7 @@ use {
     log::{info, LevelFilter},
 };
 
-pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+pub type Result<T> = eyre::Result<T>;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -35,27 +35,27 @@ async fn main() -> Result<()> {
         })
         .init();
     let config_dir = dirs::get_default_config_path();
-    info!("{:#?}", opts);
-    // let actions = cli::actions().run();
     match opts.action {
-        cli::Actions::Add {
+        Actions::Add {
             name,
             alias,
             pattern,
             filter,
             pre_release,
+            show,
         } => {
             info!("Adding the {} tool to the {} environment", name, &opts.env);
             let system = System::new();
+            log::debug!("{:?}", system);
             let mut env = Environment::load(&config_dir, &opts.env).await?;
-            cli::add_new_tool(&name, &system, &mut env, pattern).await?;
+            cli::add_new_tool(&name, &system, &mut env, pattern, alias, show).await?;
         }
-        cli::Actions::Remove { name, all } => {
+        Actions::Remove { name, all } => {
             info!("Removing {} from the {} environment", name, &opts.env);
             let env = Environment::load(&config_dir, &opts.env).await?;
             cli::remove_tool(&name, &env).await?;
         }
-        cli::Actions::List {
+        Actions::List {
             installed,
             known,
             current,
@@ -63,6 +63,22 @@ async fn main() -> Result<()> {
             info!("Listing tools in the {} environment", &opts.env);
             let env = Environment::load(&config_dir, &opts.env).await?;
             cli::list_tools(&env).await?;
+        }
+        Actions::Update { all, name } => {
+            let env = Environment::load(&config_dir, &opts.env).await?;
+            if let Some(name) = name {
+                info!("Updating {} in {} to latest version", name, env.name)
+            } else {
+                info!("Updating all tools in {} to the latest version", env.name)
+            };
+        }
+        Actions::Env { name, shell } => {
+            let env = Environment::load(&config_dir, &opts.env).await?;
+            match &shell[..] {
+                "fish" => println!("set -p PATH \"{}\"", env.base_dir),
+                "bash" | "sh" | "zsh" => println!("export PATH=\"{}:$PATH\"", env.base_dir),
+                _ => panic!("{} is not a known shell", shell),
+            }
         }
     }
     Ok(())
