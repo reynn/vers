@@ -8,10 +8,7 @@ use {
     },
     bpaf::*,
     log::*,
-    skim::{
-        prelude::{SkimItemReader, SkimOptionsBuilder},
-        Selector, Skim, SkimItem, SkimOptions,
-    },
+    skim::prelude::*,
     std::{io::Cursor, sync::Arc},
 };
 

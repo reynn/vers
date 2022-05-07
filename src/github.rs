@@ -1,10 +1,14 @@
-use crate::version;
+use std::io::Cursor;
 
 use {
-    crate::{system::System, version::Version},
+    crate::{
+        system::System,
+        version::{parse_version, Version},
+    },
     log::*,
     octocrab::models::repos::{Asset, Release},
     regex::Regex,
+    skim::prelude::*,
 };
 
 pub async fn get_repo_releases(owner: &'_ str, repo: &'_ str) -> super::Result<Vec<String>> {
@@ -69,7 +73,7 @@ pub async fn get_latest_release_tag(owner: &'_ str, repo: &'_ str) -> Version {
         .get_latest()
         .await
         .unwrap();
-    version::parse_version(&tag.tag_name)
+    parse_version(&tag.tag_name)
 }
 
 pub fn get_platform_specific_asset(
@@ -77,18 +81,61 @@ pub fn get_platform_specific_asset(
     system: &'_ System,
     user_pattern: Option<String>,
 ) -> Option<Asset> {
-    for asset in release.assets.iter() {
-        if let Some(user_pattern) = &user_pattern {
-            let r = Regex::new(user_pattern)
-                .unwrap_or_else(|_| panic!("{} is not a valid Regular Expression", user_pattern));
-            log::debug!("Matching '{}' against '{}'", r.as_str(), &asset.name);
-            if r.is_match(&asset.name) {
-                return Some(asset.clone());
+    let platform_assets: Vec<Asset> = release
+        .assets
+        .iter()
+        .filter_map(|asset| {
+            if let Some(user_pattern) = &user_pattern {
+                let r = Regex::new(user_pattern).unwrap_or_else(|_| {
+                    panic!("{} is not a valid Regular Expression", user_pattern)
+                });
+                debug!("Matching '{}' against '{}'", r.as_str(), &asset.name);
+                if r.is_match(&asset.name) {
+                    Some(asset.clone())
+                } else {
+                    None
+                }
+            } else if system.is_match(&asset.name) {
+                debug!("Asset info: {:?}", asset.name);
+                Some(asset.clone())
+            } else {
+                None
             }
-        } else if system.is_match(&asset.name) {
-            info!("Asset info: {:?}", asset.name);
-            return Some(asset.clone());
+        })
+        .collect();
+    match &platform_assets.len() {
+        2.. => {
+            let item_reader = SkimItemReader::default().of_bufread(Cursor::new(
+                platform_assets
+                    .iter()
+                    .map(|a| a.name.to_string())
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            ));
+            let selected_item: Vec<Asset> = Skim::run_with(
+                &SkimOptionsBuilder::default()
+                    .height(Some("75%"))
+                    .build()
+                    .unwrap(),
+                Some(item_reader),
+            )
+            .map(|items| {
+                items
+                    .selected_items
+                    .iter()
+                    .map(|item| {
+                        platform_assets
+                            .clone()
+                            .into_iter()
+                            .find(|asset| asset.name == item.text().to_string())
+                            .unwrap()
+                    })
+                    .collect()
+            })
+            .unwrap();
+            Some(selected_item.get(0).unwrap().to_owned())
         }
+        1 => Some(platform_assets.get(0).unwrap().clone()),
+        _ => None,
     }
-    None
 }

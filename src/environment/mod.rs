@@ -103,7 +103,7 @@ impl Environment {
         );
         match download::download_asset(&asset, &tool_version_dir).await {
             Ok(asset_path) => {
-                log::info!(
+                info!(
                     "Download of asset {} completed.",
                     asset.browser_download_url
                 );
@@ -154,10 +154,9 @@ impl Environment {
                 }
             }
             Err(download_err) => {
-                log::error!(
+                error!(
                     "Failed to download file {} from {}",
-                    asset.name,
-                    asset.browser_download_url
+                    asset.name, asset.browser_download_url
                 );
                 Err(download_err)
             }

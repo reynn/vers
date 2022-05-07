@@ -1,6 +1,7 @@
 use {
     super::Archiver,
     async_trait::async_trait,
+    log::*,
     std::{path::Path, path::PathBuf, process::Stdio},
     tokio::process::Command,
 };
@@ -22,7 +23,7 @@ impl Archiver for TarArchiver {
 
         match cmd.output().await {
             Ok(output) => {
-                log::debug!("`tar` command {:?}. output: {:?}", &cmd, output);
+                debug!("`tar` command {:?}. output: {:?}", &cmd, output);
                 Ok(())
             }
             Err(io_err) => Err(io_err.into()),

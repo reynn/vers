@@ -18,7 +18,7 @@ mod version;
 
 use {
     crate::{cli::Actions, environment::Environment, system::System},
-    log::{info, LevelFilter},
+    log::*,
 };
 
 pub type Result<T> = eyre::Result<T>;
@@ -46,7 +46,7 @@ async fn main() -> Result<()> {
         } => {
             info!("Adding the {} tool to the {} environment", name, &opts.env);
             let system = System::new();
-            log::debug!("{:?}", system);
+            debug!("{:?}", system);
             let mut env = Environment::load(&config_dir, &opts.env).await?;
             cli::add_new_tool(&name, &system, &mut env, pattern, alias, show).await?;
         }

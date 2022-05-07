@@ -1,5 +1,5 @@
 use {
-    log::{debug, info},
+    log::*,
     octocrab::models::repos::Asset,
     reqwest::{IntoUrl, Url},
     std::path::PathBuf,

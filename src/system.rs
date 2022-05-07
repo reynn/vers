@@ -1,4 +1,5 @@
 use {
+    log::*,
     regex::Regex,
     std::env::consts::{ARCH, OS},
 };
@@ -32,7 +33,7 @@ impl System {
         let os_regex = self.os.get_match_regex();
         let arch_regex = self.architecture.get_match_regex();
 
-        log::debug!(
+        debug!(
             "System OS Regex[{}], Arch Regex[{}], matching {}",
             os_regex.to_string(),
             arch_regex.to_string(),
