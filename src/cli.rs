@@ -51,14 +51,17 @@ pub enum Actions {
         /// download
         #[bpaf(short, long)]
         pattern: Option<String>,
+        /// file pattern used to search for the binary once extracted
+        #[bpaf(short('F'), long)]
+        file_pattern: Option<String>,
         /// Filter used to find the executable to link into the environment
         #[bpaf(short, long)]
         filter: Option<String>,
         /// Allow install of pre-release versions of the tool
-        #[bpaf(short, long, fallback(false))]
+        #[bpaf(short('P'), long, fallback(false))]
         pre_release: bool,
         /// Show available versions
-        #[bpaf(short, long, fallback(false))]
+        #[bpaf(short('S'), long, fallback(false))]
         show: bool,
     },
     /// Remove a tool from the designated environment
@@ -114,9 +117,10 @@ pub async fn add_new_tool(
     system: &'_ System,
     env: &mut Environment,
     user_pattern: Option<String>,
+    file_pattern: Option<String>,
     alias: Option<String>,
     show: bool,
-) -> Result<()> {
+) -> super::Result<()> {
     let split_name: Vec<&str> = name.split('@').collect();
     trace!("Split: {:?}. Length: {}", split_name, split_name.len());
     let org_repo = if split_name.len() > 1 {
@@ -128,6 +132,8 @@ pub async fn add_new_tool(
     let owner = split_org_repo[0];
     let repo = split_org_repo[1];
     let alias = alias.unwrap_or_else(|| repo.to_string());
+    let user_pattern = user_pattern.unwrap_or_else(|| "".to_string());
+    let file_pattern = file_pattern.unwrap_or_else(|| alias.clone());
 
     let versions: Vec<String> = if split_name.len() > 1 {
         vec![split_name[1].to_string()]
@@ -142,8 +148,7 @@ pub async fn add_new_tool(
                     .height(Some("75%"))
                     .multi(true)
                     .reverse(true)
-                    .build()
-                    .unwrap(),
+                    .build().unwrap(),
                 Some(item_reader),
             )
             .map(|items| {
@@ -160,15 +165,24 @@ pub async fn add_new_tool(
     };
 
     for version in versions.iter() {
-        info!("Installing {} version {}", org_repo, version);
+        println!("Installing {} version {}", org_repo, version);
 
         let parsed_version = parse_version(version);
         let release =
             github::get_specific_release_for_repo(owner, repo, &parsed_version, system).await?;
-
-        match github::get_platform_specific_asset(&release, system, user_pattern.clone()) {
-            Some(asset) => match env.add_tool(org_repo, &alias, parsed_version, asset).await {
-                Ok(_) => info!("Successfully added {} to the environment", name),
+        match github::get_platform_specific_asset(&release, system, &user_pattern) {
+            Some(asset) => match env
+                .add_tool(
+                    org_repo,
+                    &alias,
+                    parsed_version,
+                    asset,
+                    &user_pattern,
+                    &file_pattern,
+                )
+                .await
+            {
+                Ok(_) => println!("Successfully added {} to the environment", name),
                 Err(err) => error!("Error adding tool to the environment. {:?}", err),
             },
             None => error!("No assets found for this OS and architecture combo"),

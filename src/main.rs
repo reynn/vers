@@ -40,15 +40,15 @@ async fn main() -> Result<()> {
             name,
             alias,
             pattern,
+            file_pattern,
             filter,
             pre_release,
             show,
         } => {
             info!("Adding the {} tool to the {} environment", name, &opts.env);
             let system = System::new();
-            debug!("{:?}", system);
             let mut env = Environment::load(&config_dir, &opts.env).await?;
-            cli::add_new_tool(&name, &system, &mut env, pattern, alias, show).await?;
+            cli::add_new_tool(&name, &system, &mut env, pattern, file_pattern, alias, show).await?;
         }
         Actions::Remove { name, all } => {
             info!("Removing {} from the {} environment", name, &opts.env);
@@ -73,7 +73,12 @@ async fn main() -> Result<()> {
             };
         }
         Actions::Env { name, shell } => {
-            let env = Environment::load(&config_dir, &opts.env).await?;
+            let name = if let Some(name) = name {
+                name
+            } else {
+                opts.env
+            };
+            let env = Environment::load(&config_dir, &name).await?;
             match &shell[..] {
                 "fish" => println!("set -p PATH \"{}\"", env.base_dir),
                 "bash" | "sh" | "zsh" => println!("export PATH=\"{}:$PATH\"", env.base_dir),

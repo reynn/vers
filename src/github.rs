@@ -1,5 +1,3 @@
-use std::io::Cursor;
-
 use {
     crate::{
         system::System,
@@ -9,6 +7,7 @@ use {
     octocrab::models::repos::{Asset, Release},
     regex::Regex,
     skim::prelude::*,
+    std::io::Cursor,
 };
 
 pub async fn get_repo_releases(owner: &'_ str, repo: &'_ str) -> super::Result<Vec<String>> {
@@ -79,13 +78,13 @@ pub async fn get_latest_release_tag(owner: &'_ str, repo: &'_ str) -> Version {
 pub fn get_platform_specific_asset(
     release: &'_ Release,
     system: &'_ System,
-    user_pattern: Option<String>,
+    user_pattern: &'_ str,
 ) -> Option<Asset> {
     let platform_assets: Vec<Asset> = release
         .assets
         .iter()
         .filter_map(|asset| {
-            if let Some(user_pattern) = &user_pattern {
+            if !user_pattern.is_empty() {
                 let r = Regex::new(user_pattern).unwrap_or_else(|_| {
                     panic!("{} is not a valid Regular Expression", user_pattern)
                 });
@@ -127,7 +126,7 @@ pub fn get_platform_specific_asset(
                         platform_assets
                             .clone()
                             .into_iter()
-                            .find(|asset| asset.name == item.text().to_string())
+                            .find(|asset| asset.name == item.text())
                             .unwrap()
                     })
                     .collect()

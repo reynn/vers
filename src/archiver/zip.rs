@@ -2,7 +2,7 @@ use {
     super::Archiver,
     async_trait::async_trait,
     log::*,
-    std::{path::Path, path::PathBuf, process::Stdio},
+    std::{path::Path, process::Stdio},
     tokio::process::Command,
 };
 
@@ -10,7 +10,7 @@ pub struct ZipArchiver;
 
 #[async_trait]
 impl Archiver for ZipArchiver {
-    async fn extract_to(&self, file_path: &'_ PathBuf, out_dir: &'_ PathBuf) -> crate::Result<()> {
+    async fn extract_to(&self, file_path: &'_ Path, out_dir: &'_ Path) -> crate::Result<()> {
         let mut cmd = Command::new("unzip");
         cmd.stdout(Stdio::null());
         cmd.args(&[
@@ -29,8 +29,7 @@ impl Archiver for ZipArchiver {
         }
     }
 
-    async fn extract(&self, file_path: &'_ PathBuf) -> crate::Result<()> {
-        self.extract_to(file_path, &Path::new(".").to_path_buf())
-            .await
+    async fn extract(&self, file_path: &'_ Path) -> crate::Result<()> {
+        self.extract_to(file_path, Path::new(".")).await
     }
 }

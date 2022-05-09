@@ -7,10 +7,6 @@ use {
     std::fmt::Display,
 };
 
-static SEMVER_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"^(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)(?P<pre_release>-[a-zA-Z\d][-a-zA-Z.\d]*)?(?P<metadata>\+[a-zA-Z\d][-a-zA-Z.\d]*)?$"#).expect("Unable to compile regex for Semantic Versioning")
-});
-
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Version {
     /// The latest version of a tool as determined by the tool managers
@@ -23,6 +19,8 @@ pub enum Version {
     Stable,
     /// Similar to Latest except will use pre-releases if there are any available for the tool
     PreRelease,
+    ///
+    Simple(String),
 }
 
 impl Default for Version {
@@ -35,6 +33,7 @@ impl Version {
     pub fn as_tag(&self) -> String {
         match self {
             Version::SemVer(v) => v.to_string(),
+            Version::Simple(s) => s.to_string(),
             Version::Latest => "latest".to_string(),
             Version::Lts => "lts".to_string(),
             Version::Stable => "stable".to_string(),
@@ -61,7 +60,7 @@ pub fn parse_version(provided_version: &'_ str) -> Version {
             if let Ok(parsed_semver) = semver::Version::parse(provided_version) {
                 Version::SemVer(parsed_semver)
             } else {
-                Version::Latest
+                Version::Simple(provided_version.to_string())
             }
         }
     }
