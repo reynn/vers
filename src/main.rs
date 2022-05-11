@@ -5,13 +5,14 @@
     allow(dead_code, unused_macros, unused_imports, unused_variables)
 )]
 
+use cli::UpdateType;
+
 mod archiver;
 mod cli;
 mod dirs;
 mod download;
 mod environment;
 mod github;
-mod shell;
 mod system;
 mod tool;
 mod version;
@@ -48,29 +49,29 @@ async fn main() -> Result<()> {
             info!("Adding the {} tool to the {} environment", name, &opts.env);
             let system = System::new();
             let mut env = Environment::load(&config_dir, &opts.env).await?;
-            cli::add_new_tool(&name, &system, &mut env, pattern, file_pattern, alias, show).await?;
+            cli::add_new_tool(&mut env, &name, &system, pattern, file_pattern, alias, show).await?;
         }
         Actions::Remove { name, all } => {
             info!("Removing {} from the {} environment", name, &opts.env);
             let env = Environment::load(&config_dir, &opts.env).await?;
-            cli::remove_tool(&name, &env).await?;
+            cli::remove_tool(&env, &name).await?;
         }
-        Actions::List {
-            installed,
-            known,
-            current,
-        } => {
+        Actions::List { installed, current } => {
             info!("Listing tools in the {} environment", &opts.env);
             let env = Environment::load(&config_dir, &opts.env).await?;
             cli::list_tools(&env).await?;
         }
-        Actions::Update { all, name } => {
-            let env = Environment::load(&config_dir, &opts.env).await?;
-            if let Some(name) = name {
-                info!("Updating {} in {} to latest version", name, env.name)
-            } else {
-                info!("Updating all tools in {} to the latest version", env.name)
-            };
+        Actions::Update { name } => {
+            let mut env = Environment::load(&config_dir, &opts.env).await?;
+            cli::update_tools(
+                &mut env,
+                if let Some(name) = name {
+                    UpdateType::Specific(name)
+                } else {
+                    UpdateType::All
+                },
+            )
+            .await?;
         }
         Actions::Env { name, shell } => {
             let name = if let Some(name) = name {
@@ -84,6 +85,10 @@ async fn main() -> Result<()> {
                 "bash" | "sh" | "zsh" => println!("export PATH=\"{}:$PATH\"", env.base_dir),
                 _ => panic!("{} is not a known shell", shell),
             }
+        }
+        Actions::Sync => {
+            let env = Environment::load(&config_dir, &opts.env).await?;
+            println!("Syncing versions with {} configuration.", env.name);
         }
     }
     Ok(())

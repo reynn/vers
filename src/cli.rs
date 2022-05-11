@@ -80,16 +80,15 @@ pub enum Actions {
         #[bpaf(short, long, fallback(false))]
         installed: bool,
         #[bpaf(short, long, fallback(false))]
-        known: bool,
-        #[bpaf(short, long, fallback(false))]
         current: bool,
     },
+    /// sync all version information with listed in the env config file
+    #[bpaf(command("sync"))]
+    Sync,
     /// Update tools to the latest version
     #[bpaf(command("update"))]
     Update {
-        #[bpaf(short, long, fallback(false))]
-        all: bool,
-        #[bpaf(short, long)]
+        #[bpaf(positional("NAME"))]
         name: Option<String>,
     },
     /// show the exports required for setup
@@ -113,9 +112,9 @@ fn verbose() -> Parser<usize> {
 }
 
 pub async fn add_new_tool(
+    env: &mut Environment,
     name: &'_ str,
     system: &'_ System,
-    env: &mut Environment,
     user_pattern: Option<String>,
     file_pattern: Option<String>,
     alias: Option<String>,
@@ -148,7 +147,8 @@ pub async fn add_new_tool(
                     .height(Some("75%"))
                     .multi(true)
                     .reverse(true)
-                    .build().unwrap(),
+                    .build()
+                    .unwrap(),
                 Some(item_reader),
             )
             .map(|items| {
@@ -191,7 +191,7 @@ pub async fn add_new_tool(
     Ok(())
 }
 
-pub async fn remove_tool(name: &'_ str, env: &'_ Environment) -> Result<()> {
+pub async fn remove_tool(env: &'_ Environment, name: &'_ str) -> Result<()> {
     info!("Removing {} from environment. {:?}", name, env);
     Ok(())
 }
@@ -199,15 +199,18 @@ pub async fn remove_tool(name: &'_ str, env: &'_ Environment) -> Result<()> {
 pub async fn list_tools(env: &'_ Environment) -> Result<()> {
     info!("Listing all tools available. {:?}", env);
     let tools = &env.tools;
+
     if !tools.is_empty() {
-        tools.iter().for_each(|tool| println!("{}", tool.name));
+        tools
+            .iter()
+            .for_each(|tool| println!("{}@{}", tool.name, tool.current_version));
+        Ok(())
     } else {
-        println!(
+        eyre::bail!(
             "No tools currently installed in the {} environment",
             env.name
-        );
+        )
     }
-    Ok(())
 }
 
 pub enum UpdateType {
@@ -215,15 +218,52 @@ pub enum UpdateType {
     Specific(String),
 }
 
-pub async fn update_tools(env: &'_ Environment, update_type: UpdateType) -> Result<()> {
+pub async fn update_tools(env: &mut Environment, update_type: UpdateType) -> Result<()> {
+    let system = System::new();
+    let tools: Vec<crate::tool::Tool> = env.tools.iter().map(|tool| tool.clone()).collect();
+
     match update_type {
         UpdateType::All => {
-            for tool in env.tools.iter() {
-                info!("Updating tool {}", tool.name);
-            }
-        }
-        UpdateType::Specific(tool_name) => todo!(),
-    };
+            println!("-> Updating all tools...");
+            for tool in tools {
+                println!("--> Updating tool {}", tool.name);
+                let split_org_repo: Vec<&str> = tool.name.split('/').collect();
+                let owner = split_org_repo[0];
+                let repo = split_org_repo[1];
 
-    Ok(())
+                let release =
+                    github::get_specific_release_for_repo(owner, repo, &Version::Latest, &system)
+                        .await
+                        .unwrap();
+                match github::get_platform_specific_asset(&release, &system, &tool.asset_pattern) {
+                    Some(asset) => match env
+                        .add_tool(
+                            &tool.name,
+                            &tool.alias,
+                            Version::Latest,
+                            asset,
+                            &tool.asset_pattern,
+                            &tool.file_pattern,
+                        )
+                        .await
+                    {
+                        Ok(_) => println!("---> {} has been updated.", &tool.name),
+                        Err(add_tool_err) => error!(
+                            "Error installing latest version of {}. {:?}",
+                            &tool.name, add_tool_err
+                        ),
+                    },
+                    None => error!(
+                        "Unable to find an asset that matches '{}' for tool {}",
+                        &tool.asset_pattern, &tool.name
+                    ),
+                }
+            }
+            Ok(())
+        }
+        UpdateType::Specific(tool_name) => {
+            println!("-> Updating {}...", tool_name);
+            Ok(())
+        }
+    }
 }

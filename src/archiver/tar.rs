@@ -26,7 +26,7 @@ impl Archiver for TarArchiver {
                 debug!("`tar` command {:?}. output: {:?}", &cmd, output);
                 Ok(())
             }
-            Err(io_err) => Err(io_err.into()),
+            Err(io_err) => eyre::bail!(io_err),
         }
     }
 
