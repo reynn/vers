@@ -139,6 +139,7 @@ impl Environment {
                                         // add to the tools list
                                         Some(installed_tool) => {
                                             installed_tool.set_current_version(&version);
+                                            installed_tool.installed_versions.push(version.as_tag());
                                             info!(
                                                 "Added new version {} of {} in environment {}",
                                                 version.as_tag(),
@@ -187,14 +188,18 @@ impl Environment {
                                 let is_exec =
                                     String::from_utf8(output.stdout)?.contains("executable");
 
-                                if is_exec && !is_executable::is_executable(&asset_path) {
-                                    debug!("Setting {:?} as executable", &asset_path);
-                                    let set_permission = std::fs::set_permissions(
-                                        &asset_path,
-                                        std::fs::Permissions::from_mode(0o644),
-                                    );
-                                    debug!("Set Permission results: {:?}", set_permission);
-                                };
+                                info!("Setting {:?} as executable", &asset_path);
+                                match std::fs::set_permissions(
+                                    &asset_path,
+                                    std::fs::Permissions::from_mode(0o0755),
+                                ) {
+                                    Ok(_) => {
+                                        debug!("Successfully set permissions for {:?}", asset_path)
+                                    }
+                                    Err(perm_err) => {
+                                        error!("Unable to set permissions on {:?}", asset_path)
+                                    }
+                                }
 
                                 is_exec
                             }
@@ -209,6 +214,7 @@ impl Environment {
                                 // add to the tools list
                                 Some(installed_tool) => {
                                     installed_tool.set_current_version(&version);
+                                    installed_tool.installed_versions.push(version.as_tag());
                                     info!(
                                         "Added new version {} of {} to environment {}",
                                         version.as_tag(),

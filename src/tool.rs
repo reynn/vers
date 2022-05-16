@@ -31,7 +31,7 @@ impl Tool {
             asset_pattern: asset_pattern.to_string(),
             file_pattern: file_pattern.to_string(),
             current_version: version.clone(),
-            installed_versions: vec![version.clone()],
+            installed_versions: vec![version],
         }
     }
 

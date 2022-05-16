@@ -5,10 +5,9 @@
     allow(dead_code, unused_macros, unused_imports, unused_variables)
 )]
 
-use cli::UpdateType;
-
 mod archiver;
 mod cli;
+mod cli_actions;
 mod dirs;
 mod download;
 mod environment;
@@ -18,7 +17,7 @@ mod tool;
 mod version;
 
 use {
-    crate::{cli::Actions, environment::Environment, system::System},
+    crate::{cli::Actions, cli_actions::UpdateType, environment::Environment, system::System},
     log::*,
 };
 
@@ -35,7 +34,19 @@ async fn main() -> Result<()> {
             _ => LevelFilter::Warn,
         })
         .init();
+
     let config_dir = dirs::get_default_config_path();
+
+    if let Some(api_token) = opts.github_api_token {
+        info!("Initializing the GitHub client with token from CLI args");
+        octocrab::initialise(octocrab::Octocrab::builder().personal_token(api_token))?;
+    } else if let Some(env_api_token) = std::env::var_os("GITHUB_TOKEN") {
+        info!("Initializing the GitHub client with token from environment");
+        octocrab::initialise(
+            octocrab::Octocrab::builder().personal_token(env_api_token.to_str().unwrap().into()),
+        )?;
+    };
+
     match opts.action {
         Actions::Add {
             name,
@@ -46,25 +57,25 @@ async fn main() -> Result<()> {
             pre_release,
             show,
         } => {
-            info!("Adding the {} tool to the {} environment", name, &opts.env);
             let system = System::new();
             let mut env = Environment::load(&config_dir, &opts.env).await?;
-            cli::add_new_tool(&mut env, &name, &system, pattern, file_pattern, alias, show).await?;
+            cli_actions::add_new_tool(&mut env, &name, &system, pattern, file_pattern, alias, show)
+                .await?;
         }
         Actions::Remove { name, all } => {
-            info!("Removing {} from the {} environment", name, &opts.env);
-            let env = Environment::load(&config_dir, &opts.env).await?;
-            cli::remove_tool(&env, &name).await?;
+            let mut env = Environment::load(&config_dir, &opts.env).await?;
+            cli_actions::remove_tool(&mut env, &name).await?;
         }
         Actions::List { installed, current } => {
-            info!("Listing tools in the {} environment", &opts.env);
             let env = Environment::load(&config_dir, &opts.env).await?;
-            cli::list_tools(&env).await?;
+            cli_actions::list_tools(&env).await?;
         }
         Actions::Update { name } => {
+            let system = System::new();
             let mut env = Environment::load(&config_dir, &opts.env).await?;
-            cli::update_tools(
+            cli_actions::update_tools(
                 &mut env,
+                &system,
                 if let Some(name) = name {
                     UpdateType::Specific(name)
                 } else {
@@ -74,10 +85,9 @@ async fn main() -> Result<()> {
             .await?;
         }
         Actions::Env { name, shell } => {
-            let name = if let Some(name) = name {
-                name
-            } else {
-                opts.env
+            let name = match name {
+                Some(name) => name,
+                None => opts.env,
             };
             let env = Environment::load(&config_dir, &name).await?;
             match &shell[..] {
@@ -87,9 +97,11 @@ async fn main() -> Result<()> {
             }
         }
         Actions::Sync => {
-            let env = Environment::load(&config_dir, &opts.env).await?;
+            let system = System::new();
+            let mut env = Environment::load(&config_dir, &opts.env).await?;
             println!("Syncing versions with {} configuration.", env.name);
+            cli_actions::sync_tools(&mut env, &system).await?;
         }
-    }
+    };
     Ok(())
 }
