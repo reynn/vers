@@ -55,9 +55,6 @@ pub enum Actions {
         /// download
         #[bpaf(short, long)]
         pattern: Option<String>,
-        /// file pattern used to search for the binary once extracted
-        #[bpaf(short('F'), long)]
-        file_pattern: Option<String>,
         /// Filter used to find the executable to link into the environment
         #[bpaf(short, long)]
         filter: Option<String>,

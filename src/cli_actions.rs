@@ -18,7 +18,6 @@ pub async fn add_new_tool(
     show: bool,
 ) -> super::Result<()> {
     let split_name: Vec<&str> = name.split('@').collect();
-    trace!("Split: {:?}. Length: {}", split_name, split_name.len());
     let org_repo = if split_name.len() > 1 {
         split_name[0]
     } else {
@@ -30,6 +29,7 @@ pub async fn add_new_tool(
     let alias = alias.unwrap_or_else(|| repo.to_string());
     let user_pattern = user_pattern.unwrap_or_else(|| "".to_string());
     let file_pattern = file_pattern.unwrap_or_else(|| alias.clone());
+    info!("Owner `{owner}`, Repo `{repo}`, Alias `{alias}`, Pattern `{user_pattern}`, Filter `{file_pattern}`");
 
     let versions: Vec<String> = if split_name.len() > 1 {
         vec![split_name[1].to_string()]
@@ -65,40 +65,12 @@ pub async fn add_new_tool(
     for version in versions.iter() {
         let parsed_version = parse_version(version);
 
-        let tool = Tool::new(org_repo, &alias, &parsed_version, &user_pattern, &file_pattern);
+        let tool = Tool::new(org_repo, &alias, &Version::Latest, &user_pattern, &file_pattern);
 
         match handle_tool_install(env, &tool, &system, Some(parsed_version)).await {
-            Ok(_) => info!("Tool {} complete.", &tool.name),
+            Ok(_) => println!("Installation of tool {} complete.", &tool.name),
             Err(install_err) => error!("{:?}", install_err),
         }
-
-        // println!("Installing {} version {}", org_repo, version);
-        //
-        //
-        // match github::get_specific_release_for_repo(owner, repo, &parsed_version, system).await {
-        //     Ok(release) => {
-        //         match github::get_platform_specific_asset(&release, system, &user_pattern) {
-        //             Some(asset) => match env
-        //                 .add_tool(
-        //                     org_repo,
-        //                     &alias,
-        //                     parsed_version,
-        //                     asset,
-        //                     &user_pattern,
-        //                     &file_pattern,
-        //                 )
-        //                 .await
-        //             {
-        //                 Ok(_) => println!("Successfully added {name} to the environment"),
-        //                 Err(err) => error!("Error adding tool to the environment. {:?}", err),
-        //             },
-        //             None => error!("No assets found for this OS and architecture combo"),
-        //         }
-        //     }
-        //     Err(release_err) => {
-        //         error!("Failed to get release from {org_repo}")
-        //     }
-        // }
     }
     Ok(())
 }
@@ -160,7 +132,7 @@ pub async fn update_tools(
                 info!("Tool: {:?}", tool);
 
                 match handle_tool_install(env, &tool, &system, version).await {
-                    Ok(_) => info!("Tool {} complete.", &tool.name),
+                    Ok(_) => info!("Tool {} has been updated.", &tool.name),
                     Err(install_err) => error!("{:?}", install_err),
                 }
             } else {
@@ -177,7 +149,7 @@ pub async fn sync_tools(env: &mut Environment, system: &'_ System) -> crate::Res
     for tool in tools.iter() {
         let parsed_version = parse_version(&tool.current_version);
         match handle_tool_install(env, &tool, &system, Some(parsed_version)).await {
-            Ok(_) => info!("Tool {} complete.", &tool.name),
+            Ok(_) => info!("Tool {} has been installed at version {}", &tool.name, tool.current_version),
             Err(install_err) => error!("{:?}", install_err),
         }
     }
@@ -201,6 +173,8 @@ async fn handle_tool_install(
         info!("Getting version from release tags");
         github::get_latest_release_tag(owner, repo).await
     };
+
+    
 
     info!(
         "Comparing `{}` to `{}`",
@@ -231,7 +205,7 @@ async fn handle_tool_install(
                 )
                 .await
             {
-                Ok(_) => println!("---> {owner}/{repo} has been updated."),
+                Ok(_) => (),
                 Err(add_tool_err) => error!(
                     "Error installing latest version of {}. {:?}",
                     &tool.name, add_tool_err

@@ -139,13 +139,16 @@ impl Environment {
                                         // add to the tools list
                                         Some(installed_tool) => {
                                             installed_tool.set_current_version(&version);
-                                            installed_tool.installed_versions.push(version.as_tag());
-                                            info!(
-                                                "Added new version {} of {} in environment {}",
-                                                version.as_tag(),
-                                                name,
-                                                self.name
-                                            );
+                                            let version_tag = &version.as_tag();
+                                            if !installed_tool.installed_versions.iter().find(|v| &v[..] == &version_tag[..]).is_some() {
+                                                installed_tool.installed_versions.push(version.as_tag());
+                                                info!(
+                                                    "Added new version {} of {} in environment {}",
+                                                    version.as_tag(),
+                                                    name,
+                                                    self.name
+                                                );
+                                            }
                                             Ok(())
                                         }
                                         // create a new tool, and add to our list
@@ -214,13 +217,16 @@ impl Environment {
                                 // add to the tools list
                                 Some(installed_tool) => {
                                     installed_tool.set_current_version(&version);
-                                    installed_tool.installed_versions.push(version.as_tag());
-                                    info!(
-                                        "Added new version {} of {} to environment {}",
-                                        version.as_tag(),
-                                        name,
-                                        self.name
-                                    );
+                                    let version_tag = &version.as_tag();
+                                    if !installed_tool.installed_versions.iter().find(|v| &v[..] == &version_tag[..]).is_some() {
+                                        installed_tool.installed_versions.push(version.as_tag());
+                                        info!(
+                                            "Added new version {} of {} to environment {}",
+                                            version.as_tag(),
+                                            name,
+                                            self.name
+                                        );
+                                    }
                                 }
                                 // create a new tool, and add to our list
                                 None => {

@@ -52,14 +52,14 @@ async fn main() -> Result<()> {
             name,
             alias,
             pattern,
-            file_pattern,
             filter,
             pre_release,
             show,
         } => {
+            info!("CLI: Name `{name}`, alias `{:?}`, pattern `{:?}`, filter `{:?}`, pre_release `{pre_release}`, show `{show}`", alias, pattern, filter);
             let system = System::new();
             let mut env = Environment::load(&config_dir, &opts.env).await?;
-            cli_actions::add_new_tool(&mut env, &name, &system, pattern, file_pattern, alias, show)
+            cli_actions::add_new_tool(&mut env, &name, &system, pattern, filter, alias, show)
                 .await?;
         }
         Actions::Remove { name, all } => {
