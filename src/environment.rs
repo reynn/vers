@@ -1,17 +1,14 @@
 use {
     crate::{archiver, download, tool::Tool, version::Version},
-    directories_next::ProjectDirs,
     log::*,
     octocrab::models::repos::Asset,
     serde::{Deserialize, Serialize},
     serde_json::{from_str, to_string_pretty},
     std::{
-        fs::FileType,
         os::unix::prelude::PermissionsExt,
         path::{Path, PathBuf},
-        process::exit,
     },
-    tokio::{fs::read_to_string, process::Command, task::futures},
+    tokio::{fs::read_to_string, process::Command},
     walkdir::{DirEntry, WalkDir},
 };
 
@@ -92,7 +89,7 @@ impl Environment {
         alias: &'_ str,
         version: Version,
         asset: Asset,
-        user_pattern: &'_ str,
+        asset_pattern: &'_ str,
         file_pattern: &'_ str,
     ) -> crate::Result<()> {
         let tool_dir = Path::new(&self.base_dir)
@@ -140,8 +137,14 @@ impl Environment {
                                         Some(installed_tool) => {
                                             installed_tool.set_current_version(&version);
                                             let version_tag = &version.as_tag();
-                                            if !installed_tool.installed_versions.iter().find(|v| &v[..] == &version_tag[..]).is_some() {
-                                                installed_tool.installed_versions.push(version.as_tag());
+                                            if !installed_tool
+                                                .installed_versions
+                                                .iter()
+                                                .any(|v| v[..] == version_tag[..])
+                                            {
+                                                installed_tool
+                                                    .installed_versions
+                                                    .push(version.as_tag());
                                                 info!(
                                                     "Added new version {} of {} in environment {}",
                                                     version.as_tag(),
@@ -157,7 +160,7 @@ impl Environment {
                                                 name,
                                                 alias,
                                                 &version,
-                                                user_pattern,
+                                                asset_pattern,
                                                 file_pattern,
                                             ));
                                             info!(
@@ -200,14 +203,21 @@ impl Environment {
                                         debug!("Successfully set permissions for {:?}", asset_path)
                                     }
                                     Err(perm_err) => {
-                                        error!("Unable to set permissions on {:?}", asset_path)
+                                        error!(
+                                            "Unable to set permissions on {:?}. {:?}",
+                                            asset_path, perm_err
+                                        )
                                     }
                                 }
 
                                 is_exec
                             }
                             Err(cmd_err) => {
-                                eyre::bail!("Unable to run `file` on {:?}", &asset_path)
+                                eyre::bail!(
+                                    "Unable to run `file` on {:?}. {:?}",
+                                    &asset_path,
+                                    cmd_err
+                                )
                             }
                         };
 
@@ -218,7 +228,11 @@ impl Environment {
                                 Some(installed_tool) => {
                                     installed_tool.set_current_version(&version);
                                     let version_tag = &version.as_tag();
-                                    if !installed_tool.installed_versions.iter().find(|v| &v[..] == &version_tag[..]).is_some() {
+                                    if !installed_tool
+                                        .installed_versions
+                                        .iter()
+                                        .any(|v| v[..] == version_tag[..])
+                                    {
                                         installed_tool.installed_versions.push(version.as_tag());
                                         info!(
                                             "Added new version {} of {} to environment {}",
@@ -235,7 +249,7 @@ impl Environment {
                                         name,
                                         alias,
                                         &version,
-                                        user_pattern,
+                                        asset_pattern,
                                         file_pattern,
                                     ));
                                 }
@@ -249,9 +263,10 @@ impl Environment {
             }
             Err(download_err) => {
                 eyre::bail!(
-                    "Failed to download file {} from {}",
+                    "Failed to download file {} from {}. {:?}",
                     asset.name,
-                    asset.browser_download_url
+                    asset.browser_download_url,
+                    download_err
                 )
             }
         }
@@ -279,7 +294,10 @@ fn create_symlink(src: &'_ Path, dest: &'_ Path) {
             info!("Creating symlink from {:?} to {:?}", src, dest);
             match std::os::unix::fs::symlink(src, dest) {
                 Ok(_) => (),
-                Err(e) => error!("Failed to create symlink from {:?} to {:?}", src, dest),
+                Err(e) => error!(
+                    "Failed to create symlink from {:?} to {:?}. {:?}",
+                    src, dest, e
+                ),
             }
         }
         _ => panic!("unknown operating system"),

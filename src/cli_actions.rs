@@ -16,6 +16,7 @@ pub async fn add_new_tool(
     file_pattern: Option<String>,
     alias: Option<String>,
     show: bool,
+    pre_release: bool,
 ) -> super::Result<()> {
     let split_name: Vec<&str> = name.split('@').collect();
     let org_repo = if split_name.len() > 1 {
@@ -34,7 +35,9 @@ pub async fn add_new_tool(
     let versions: Vec<String> = if split_name.len() > 1 {
         vec![split_name[1].to_string()]
     } else {
-        let versions = github::get_repo_releases(owner, repo).await.unwrap();
+        let versions = github::get_repo_releases(owner, repo, pre_release)
+            .await
+            .unwrap();
 
         // if the user wants a list of the releases show that, otherwise just get the first result
         if show {
@@ -65,9 +68,15 @@ pub async fn add_new_tool(
     for version in versions.iter() {
         let parsed_version = parse_version(version);
 
-        let tool = Tool::new(org_repo, &alias, &Version::Latest, &user_pattern, &file_pattern);
+        let tool = Tool::new(
+            org_repo,
+            &alias,
+            &Version::Latest,
+            &user_pattern,
+            &file_pattern,
+        );
 
-        match handle_tool_install(env, &tool, &system, Some(parsed_version)).await {
+        match handle_tool_install(env, &tool, system, Some(parsed_version)).await {
             Ok(_) => println!("Installation of tool {} complete.", &tool.name),
             Err(install_err) => error!("{:?}", install_err),
         }
@@ -75,19 +84,31 @@ pub async fn add_new_tool(
     Ok(())
 }
 
-pub async fn remove_tool(env: &mut Environment, name: &'_ str) -> crate::Result<()> {
+pub async fn remove_tool(
+    env: &mut Environment,
+    name: &'_ str,
+    _remove_all_versions: bool,
+) -> crate::Result<()> {
     info!("Removing {name} from environment. {:?}", env);
     Ok(())
 }
 
-pub async fn list_tools(env: &'_ Environment) -> crate::Result<()> {
+pub async fn list_tools(env: &'_ Environment, installed: bool) -> crate::Result<()> {
     info!("Listing all tools available. {:?}", env);
     let tools = &env.tools;
 
     if !tools.is_empty() {
-        tools
-            .iter()
-            .for_each(|tool| println!("{}@{}", tool.name, tool.current_version));
+        if installed {
+            tools.iter().for_each(|tool| {
+                tool.installed_versions
+                    .iter()
+                    .for_each(|installed_version| println!("{}@{}", tool.name, installed_version));
+            })
+        } else {
+            tools
+                .iter()
+                .for_each(|tool| println!("{}@{}", tool.name, tool.current_version));
+        }
         Ok(())
     } else {
         eyre::bail!(
@@ -112,7 +133,7 @@ pub async fn update_tools(
             let tools: Vec<Tool> = env.tools.to_vec();
             println!("-> Updating all tools...");
             for tool in tools {
-                match handle_tool_install(env, &tool, &system, None).await {
+                match handle_tool_install(env, &tool, system, None).await {
                     Ok(_) => info!("Tool {} complete.", &tool.name),
                     Err(install_err) => error!("{:?}", install_err),
                 }
@@ -123,7 +144,7 @@ pub async fn update_tools(
             println!("-> Updating {tool_name}...");
             let tools = env.tools.to_vec();
             let split_name: Vec<&str> = tool_name.split('@').collect();
-            let version = if split_name.len() < 1 {
+            let version = if split_name.len() == 2 {
                 Some(parse_version(split_name[1]))
             } else {
                 None
@@ -131,7 +152,7 @@ pub async fn update_tools(
             if let Some(tool) = tools.iter().find(|t| t.name == split_name[0]) {
                 info!("Tool: {:?}", tool);
 
-                match handle_tool_install(env, &tool, &system, version).await {
+                match handle_tool_install(env, tool, system, version).await {
                     Ok(_) => info!("Tool {} has been updated.", &tool.name),
                     Err(install_err) => error!("{:?}", install_err),
                 }
@@ -148,8 +169,11 @@ pub async fn sync_tools(env: &mut Environment, system: &'_ System) -> crate::Res
 
     for tool in tools.iter() {
         let parsed_version = parse_version(&tool.current_version);
-        match handle_tool_install(env, &tool, &system, Some(parsed_version)).await {
-            Ok(_) => info!("Tool {} has been installed at version {}", &tool.name, tool.current_version),
+        match handle_tool_install(env, tool, system, Some(parsed_version)).await {
+            Ok(_) => info!(
+                "Tool {} has been installed at version {}",
+                &tool.name, tool.current_version
+            ),
             Err(install_err) => error!("{:?}", install_err),
         }
     }
@@ -171,10 +195,8 @@ async fn handle_tool_install(
         version
     } else {
         info!("Getting version from release tags");
-        github::get_latest_release_tag(owner, repo).await
+        github::get_latest_release_tag(owner, repo).await.unwrap()
     };
-
-    
 
     info!(
         "Comparing `{}` to `{}`",
@@ -183,12 +205,13 @@ async fn handle_tool_install(
     );
     if tool.current_version != version.as_tag() {
         println!("--> Installing tool {owner}/{repo}@{}", version.as_tag());
-        let release = match github::get_specific_release_for_repo(owner, repo, &version, system).await {
+        let release = match github::get_specific_release_for_repo(owner, repo, &version).await {
             Ok(release) => release,
             Err(release_err) => {
                 eyre::bail!(
-                    "Unable to get release {} for {owner}/{repo}",
-                    version.as_tag()
+                    "Unable to get release {} for {owner}/{repo}. {:?}",
+                    version.as_tag(),
+                    release_err
                 )
             }
         };

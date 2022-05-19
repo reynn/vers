@@ -1,6 +1,6 @@
 use {
     directories_next::{BaseDirs, ProjectDirs, UserDirs},
-    std::path::{Path, PathBuf},
+    std::path::PathBuf,
 };
 
 pub fn get_default_config_path() -> PathBuf {

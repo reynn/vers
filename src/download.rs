@@ -1,9 +1,8 @@
 use {
     log::*,
     octocrab::models::repos::Asset,
-    reqwest::{IntoUrl, Url},
     std::path::PathBuf,
-    tokio::fs::{copy, create_dir_all, write, File},
+    tokio::fs::{create_dir_all, write},
 };
 
 /// Download a file from a provided URL
@@ -19,10 +18,6 @@ pub async fn download_asset<P: Into<PathBuf>>(
             Ok(_) => {}
             Err(create_dirs_err) => eyre::bail!(create_dirs_err),
         };
-    };
-    let out_file = match File::create(&out_file_name).await {
-        Ok(file) => file,
-        Err(file_create_err) => eyre::bail!(file_create_err),
     };
     match reqwest::get(asset.browser_download_url.as_str()).await {
         Ok(cd) => match cd.bytes().await {

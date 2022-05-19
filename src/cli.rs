@@ -1,17 +1,4 @@
-use {
-    crate::{
-        environment::Environment,
-        github,
-        system::System,
-        tool::Tool,
-        version::{parse_version, Version},
-        Result,
-    },
-    bpaf::*,
-    log::*,
-    skim::prelude::*,
-    std::{io::Cursor, sync::Arc},
-};
+use bpaf::*;
 
 #[derive(Debug, Clone, Bpaf)]
 #[bpaf(options)]
@@ -80,8 +67,6 @@ pub enum Actions {
     List {
         #[bpaf(short, long, fallback(false))]
         installed: bool,
-        #[bpaf(short, long, fallback(false))]
-        current: bool,
     },
     /// sync all version information with listed in the env config file
     #[bpaf(command("sync"))]

@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Setup | Checkout
-        uses: actions/checkout@v2.3.4
+        uses: actions/checkout@v2
 
       - name: Setup | Rust
         uses: actions-rs/toolchain@v1.0.7
@@ -28,9 +28,6 @@ jobs:
           profile: minimal
           components: rustfmt
 
-      - name: Setup | libdbus (ubuntu)
-        run: sudo apt-get install libdbus-1-dev
-
       - name: Build | Format
         run: cargo fmt --all -- --check
 
@@ -39,18 +36,14 @@ jobs:
     name: Clippy [Linter]
     strategy:
       matrix:
-        os: [ubuntu-latest, macOS-latest]
+        os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Setup | Checkout
-        uses: actions/checkout@v2.3.4
-
-      - name: Setup | libdbus (ubuntu)
-        if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get install libdbus-1-dev
+        uses: actions/checkout@v2
 
       - name: Setup | Rust
-        uses: actions-rs/toolchain@v1.0.7
+        uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           override: true
@@ -58,7 +51,7 @@ jobs:
           components: clippy
 
       - name: Build | Lint
-        uses: actions-rs/cargo@v1.0.3
+        uses: actions-rs/cargo@v1
         with:
           command: clippy
           args: --workspace --locked --all-targets --all-features -- -D clippy::all
@@ -69,10 +62,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Setup | Checkout
-        uses: actions/checkout@v2.3.4
+        uses: actions/checkout@v2
 
       - name: Setup | Rust
-        uses: actions-rs/toolchain@v1.0.7
+        uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           profile: minimal
@@ -90,15 +83,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macOS-latest]
-        rust: [stable, nightly]
+        os: [ubuntu-latest, macos-latest]
+        rust: [stable, beta, nightly]
     steps:
       - name: Setup | Checkout
-        uses: actions/checkout@v2.3.4
-
-      - name: Setup | libdbus (ubuntu)
-        if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get install libdbus-1-dev
+        uses: actions/checkout@v2
 
       # Install all the required dependencies for testing
       - name: Setup | Rust

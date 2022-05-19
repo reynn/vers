@@ -1,8 +1,6 @@
 use {
-    crate::{environment::Environment, version::Version},
+    crate::version::Version,
     serde::{Deserialize, Serialize},
-    std::path::Path,
-    tokio::fs::read_to_string,
 };
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
@@ -39,6 +37,7 @@ impl Tool {
         self.current_version = version.to_string()
     }
 
+    #[allow(dead_code)]
     pub fn add_version(&mut self, version: &'_ Version) {
         self.installed_versions.push(version.as_tag())
     }

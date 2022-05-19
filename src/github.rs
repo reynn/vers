@@ -10,7 +10,11 @@ use {
     std::io::Cursor,
 };
 
-pub async fn get_repo_releases(owner: &'_ str, repo: &'_ str) -> super::Result<Vec<String>> {
+pub async fn get_repo_releases(
+    owner: &'_ str,
+    repo: &'_ str,
+    pre_release: bool,
+) -> super::Result<Vec<String>> {
     Ok(octocrab::instance()
         .repos(owner, repo)
         .releases()
@@ -20,6 +24,10 @@ pub async fn get_repo_releases(owner: &'_ str, repo: &'_ str) -> super::Result<V
         .await?
         .items
         .iter()
+        .filter(|release| match pre_release {
+            true => true,
+            false => !release.prerelease,
+        })
         .map(|release| release.tag_name.to_string())
         .collect())
 }
@@ -28,7 +36,6 @@ pub async fn get_specific_release_for_repo(
     owner: &'_ str,
     repo: &'_ str,
     version: &'_ Version,
-    system_info: &'_ System,
 ) -> super::Result<Release> {
     info!(
         "Getting release({}) for {}/{}",
@@ -50,7 +57,13 @@ pub async fn get_specific_release_for_repo(
             .await
         {
             Ok(tagged_release) => Ok(tagged_release),
-            Err(e) => {
+            Err(_) => {
+                error!(
+                    "Unable to get release {} for {}/{}.",
+                    version.as_tag(),
+                    owner,
+                    repo
+                );
                 match octo
                     .repos(owner, repo)
                     .releases()
@@ -65,14 +78,16 @@ pub async fn get_specific_release_for_repo(
     }
 }
 
-pub async fn get_latest_release_tag(owner: &'_ str, repo: &'_ str) -> Version {
-    let tag = octocrab::instance()
+pub async fn get_latest_release_tag(owner: &'_ str, repo: &'_ str) -> Option<Version> {
+    match octocrab::instance()
         .repos(owner, repo)
         .releases()
         .get_latest()
         .await
-        .unwrap();
-    parse_version(&tag.tag_name)
+    {
+        Ok(tag) => Some(parse_version(&tag.tag_name)),
+        Err(_) => None,
+    }
 }
 
 pub fn get_platform_specific_asset(

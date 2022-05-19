@@ -2,6 +2,14 @@
 name = "vers"
 version = "0.1.0"
 edition = "2021"
+description = "Install and manage dev tools with multiple environments"
+repository = "https://github.com/reynn/vers"
+license = "MIT OR Apache-2.0"
+categories = ["command-line-utilities"]
+
+[package.metadata.bundle]
+name = "vers"
+identifier = "dev.reynn.vers"
 
 [dependencies]
 async-trait = "0.1"

@@ -1,9 +1,9 @@
 // Turn off common dev assertions only for debug builds, release builds will still work as normal
 #![warn(clippy::all)]
-#![cfg_attr(
-    debug_assertions,
-    allow(dead_code, unused_macros, unused_imports, unused_variables)
-)]
+// #![cfg_attr(
+//     debug_assertions,
+//     allow(dead_code, unused_macros, unused_imports, unused_variables)
+// )]
 
 mod archiver;
 mod cli;
@@ -56,19 +56,28 @@ async fn main() -> Result<()> {
             pre_release,
             show,
         } => {
-            info!("CLI: Name `{name}`, alias `{:?}`, pattern `{:?}`, filter `{:?}`, pre_release `{pre_release}`, show `{show}`", alias, pattern, filter);
+            debug!("CLI: Name `{name}`, alias `{:?}`, pattern `{:?}`, filter `{:?}`, pre_release `{pre_release}`, show `{show}`", alias, pattern, filter);
             let system = System::new();
             let mut env = Environment::load(&config_dir, &opts.env).await?;
-            cli_actions::add_new_tool(&mut env, &name, &system, pattern, filter, alias, show)
-                .await?;
+            cli_actions::add_new_tool(
+                &mut env,
+                &name,
+                &system,
+                pattern,
+                filter,
+                alias,
+                show,
+                pre_release,
+            )
+            .await?;
         }
         Actions::Remove { name, all } => {
             let mut env = Environment::load(&config_dir, &opts.env).await?;
-            cli_actions::remove_tool(&mut env, &name).await?;
+            cli_actions::remove_tool(&mut env, &name, all).await?;
         }
-        Actions::List { installed, current } => {
+        Actions::List { installed } => {
             let env = Environment::load(&config_dir, &opts.env).await?;
-            cli_actions::list_tools(&env).await?;
+            cli_actions::list_tools(&env, installed).await?;
         }
         Actions::Update { name } => {
             let system = System::new();
