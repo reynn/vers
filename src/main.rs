@@ -11,6 +11,7 @@ mod cli_actions;
 mod dirs;
 mod download;
 mod environment;
+mod manager;
 mod github;
 mod system;
 mod tool;
