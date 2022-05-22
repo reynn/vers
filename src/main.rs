@@ -11,8 +11,8 @@ mod cli_actions;
 mod dirs;
 mod download;
 mod environment;
-mod manager;
 mod github;
+mod manager;
 mod system;
 mod tool;
 mod version;
@@ -27,6 +27,7 @@ pub type Result<T> = eyre::Result<T>;
 #[tokio::main]
 async fn main() -> Result<()> {
     let opts = cli::opts().run();
+
     env_logger::builder()
         .filter_level(match opts.verbose {
             3 => LevelFilter::Trace,
@@ -72,7 +73,7 @@ async fn main() -> Result<()> {
             )
             .await?;
         }
-        Actions::Remove { name, all } => {
+        Actions::Remove { name, all: _ } => {
             let mut env = Environment::load(&config_dir, &opts.env).await?;
             cli_actions::remove_tool(&mut env, &name, all).await?;
         }

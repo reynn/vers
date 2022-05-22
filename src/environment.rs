@@ -261,7 +261,7 @@ impl Environment {
                     }
                 }
             }
-            Err(download_err) => {
+            Err(_) => {
                 eyre::bail!(
                     "Failed to download file {} from {}. {:?}",
                     asset.name,
