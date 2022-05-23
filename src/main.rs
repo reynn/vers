@@ -73,7 +73,7 @@ async fn main() -> Result<()> {
             )
             .await?;
         }
-        Actions::Remove { name, all: _ } => {
+        Actions::Remove { name, all } => {
             let mut env = Environment::load(&config_dir, &opts.env).await?;
             cli_actions::remove_tool(&mut env, &name, all).await?;
         }
