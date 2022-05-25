@@ -1,82 +1,81 @@
 use {
     crate::{
-        environment::Environment, github, system::System, tool::Tool, version::parse_version,
-        version::Version,
+        environment::Environment, manager::Manager, system::System, tool::Tool, version,
+        version::parse_version, version::Version,
     },
     log::*,
     skim::prelude::*,
     std::io::Cursor,
 };
 
+pub struct Patterns {
+    pub asset: Option<String>,
+    pub file: Option<String>,
+}
+
 pub async fn add_new_tool(
     env: &mut Environment,
     name: &'_ str,
+    version: Option<Version>,
     system: &'_ System,
-    user_pattern: Option<String>,
-    file_pattern: Option<String>,
+    patterns: &'_ Patterns,
     alias: Option<String>,
     show: bool,
-    pre_release: bool,
+    manager: Arc<impl Manager>,
 ) -> super::Result<()> {
-    let split_name: Vec<&str> = name.split('@').collect();
-    let org_repo = if split_name.len() > 1 {
-        split_name[0]
-    } else {
-        name
-    };
-    let split_org_repo: Vec<&str> = org_repo.split('/').collect();
-    let owner = split_org_repo[0];
-    let repo = split_org_repo[1];
-    let alias = alias.unwrap_or_else(|| repo.to_string());
-    let user_pattern = user_pattern.unwrap_or_else(|| "".to_string());
-    let file_pattern = file_pattern.unwrap_or_else(|| alias.clone());
-    info!("Owner `{owner}`, Repo `{repo}`, Alias `{alias}`, Pattern `{user_pattern}`, Filter `{file_pattern}`");
+    let alias = alias.unwrap_or_else(
+        || match name.clone().split('/').collect::<Vec<_>>().get(0) {
+            Some(n) => n.to_string(),
+            None => "".to_string(),
+        },
+    );
+    let user_pattern = patterns.asset.clone().unwrap_or_else(|| "".to_string());
+    let file_pattern = patterns.file.clone().unwrap_or_else(|| alias.clone());
+    debug!("Name `{name}`, Alias `{alias}`, Pattern `{user_pattern}`, Filter `{file_pattern}`");
 
-    let versions: Vec<String> = if split_name.len() > 1 {
-        vec![split_name[1].to_string()]
+    let versions: Vec<Version> = if let Some(v) = version {
+        vec![v]
     } else {
-        let versions = github::get_repo_releases(owner, repo, pre_release)
-            .await
-            .unwrap();
-
-        // if the user wants a list of the releases show that, otherwise just get the first result
-        if show {
-            let item_reader =
-                SkimItemReader::default().of_bufread(Cursor::new(versions.join("\n")));
-            Skim::run_with(
-                &SkimOptionsBuilder::default()
-                    .height(Some("75%"))
-                    .multi(true)
-                    .reverse(true)
-                    .build()
-                    .unwrap(),
-                Some(item_reader),
-            )
-            .map(|items| {
-                items
-                    .selected_items
-                    .iter()
-                    .map(|item| item.text().to_string())
-                    .collect()
-            })
-            .unwrap_or_default()
-        } else {
-            vec![versions.get(0).unwrap().to_string()]
+        match manager.get_all_versions(name).await {
+            Ok(versions) => {
+                // if the user wants a list of the releases show that, otherwise just get the first result
+                if show {
+                    let version_list: Vec<String> = versions.iter().map(|v| v.as_tag()).collect();
+                    let item_reader =
+                        SkimItemReader::default().of_bufread(Cursor::new(version_list.join("\n")));
+                    Skim::run_with(
+                        &SkimOptionsBuilder::default()
+                            .height(Some("75%"))
+                            .multi(true)
+                            .reverse(true)
+                            .build()
+                            .unwrap(),
+                        Some(item_reader),
+                    )
+                    .map(|items| {
+                        items
+                            .selected_items
+                            .iter()
+                            .map(|item| version::parse_version(item.text().to_string().as_str()))
+                            .collect()
+                    })
+                    .unwrap_or_default()
+                } else {
+                    vec![versions[0].clone()]
+                }
+            }
+            Err(v_err) => {
+                eyre::bail!("Failed to get versions for {name}. {:?}", v_err)
+            }
         }
     };
 
+    // let manager = Arc::clone(&manager);
     for version in versions.iter() {
-        let parsed_version = parse_version(version);
+        let tool = Tool::new(name, &alias, &Version::Latest, &user_pattern, &file_pattern);
 
-        let tool = Tool::new(
-            org_repo,
-            &alias,
-            &Version::Latest,
-            &user_pattern,
-            &file_pattern,
-        );
-
-        match handle_tool_install(env, &tool, system, Some(parsed_version)).await {
+        match handle_tool_install(env, &tool, system, Some(version.clone()), manager.clone()).await
+        {
             Ok(_) => println!("Installation of tool {} complete.", &tool.name),
             Err(install_err) => error!("{:?}", install_err),
         }
@@ -127,13 +126,14 @@ pub async fn update_tools(
     env: &mut Environment,
     system: &'_ System,
     update_type: UpdateType,
+    manager: Arc<impl Manager>,
 ) -> crate::Result<()> {
     match update_type {
         UpdateType::All => {
             let tools: Vec<Tool> = env.tools.to_vec();
             println!("-> Updating all tools...");
             for tool in tools {
-                match handle_tool_install(env, &tool, system, None).await {
+                match handle_tool_install(env, &tool, system, None, manager.clone()).await {
                     Ok(_) => info!("Tool {} complete.", &tool.name),
                     Err(install_err) => error!("{:?}", install_err),
                 }
@@ -152,7 +152,7 @@ pub async fn update_tools(
             if let Some(tool) = tools.iter().find(|t| t.name == split_name[0]) {
                 info!("Tool: {:?}", tool);
 
-                match handle_tool_install(env, tool, system, version).await {
+                match handle_tool_install(env, tool, system, version, manager.clone()).await {
                     Ok(_) => info!("Tool {} has been updated.", &tool.name),
                     Err(install_err) => error!("{:?}", install_err),
                 }
@@ -164,12 +164,16 @@ pub async fn update_tools(
     }
 }
 
-pub async fn sync_tools(env: &mut Environment, system: &'_ System) -> crate::Result<()> {
+pub async fn sync_tools(
+    env: &mut Environment,
+    system: &'_ System,
+    manager: Arc<impl Manager>,
+) -> crate::Result<()> {
     let tools: Vec<Tool> = env.tools.to_vec();
 
     for tool in tools.iter() {
         let parsed_version = parse_version(&tool.current_version);
-        match handle_tool_install(env, tool, system, Some(parsed_version)).await {
+        match handle_tool_install(env, tool, system, Some(parsed_version), manager.clone()).await {
             Ok(_) => info!(
                 "Tool {} has been installed at version {}",
                 &tool.name, tool.current_version
@@ -185,17 +189,14 @@ async fn handle_tool_install(
     tool: &'_ Tool,
     system: &'_ System,
     version: Option<Version>,
+    manager: Arc<impl Manager>,
 ) -> crate::Result<()> {
-    let split_org_repo: Vec<&str> = tool.name.split('/').collect();
-    let owner = split_org_repo[0];
-    let repo = split_org_repo[1];
-
     let version = if let Some(version) = version {
         info!("Using provided version {}", version.as_tag());
         version
     } else {
         info!("Getting version from release tags");
-        github::get_latest_release_tag(owner, repo).await.unwrap()
+        manager.get_latest_version(&tool.name).await?
     };
 
     info!(
@@ -204,41 +205,34 @@ async fn handle_tool_install(
         version.as_tag()
     );
     if tool.current_version != version.as_tag() {
-        println!("--> Installing tool {owner}/{repo}@{}", version.as_tag());
-        let release = match github::get_specific_release_for_repo(owner, repo, &version).await {
-            Ok(release) => release,
-            Err(release_err) => {
-                eyre::bail!(
-                    "Unable to get release {} for {owner}/{repo}. {:?}",
-                    version.as_tag(),
-                    release_err
+        println!("--> Installing tool {}@{}", &tool.name, version.as_tag());
+        match manager
+            .get_assets_for_version(&tool.name, &version, system)
+            .await
+        {
+            Ok(asset) => {
+                match env
+                    .add_tool(
+                        &tool.name,
+                        &tool.alias,
+                        version,
+                        &asset[0],
+                        &tool.asset_pattern,
+                        &tool.file_pattern,
+                    )
+                    .await
+                {
+                    Ok(_) => {}
+                    Err(_) => {}
+                }
+            }
+            Err(assets_err) => {
+                error!(
+                    "Failed to get assets for system for {}. Error: {:?}",
+                    tool.name, assets_err
                 )
             }
         };
-
-        match github::get_platform_specific_asset(&release, system, &tool.asset_pattern) {
-            Some(asset) => match env
-                .add_tool(
-                    &tool.name,
-                    &tool.alias,
-                    version,
-                    asset,
-                    &tool.asset_pattern,
-                    &tool.file_pattern,
-                )
-                .await
-            {
-                Ok(_) => (),
-                Err(add_tool_err) => error!(
-                    "Error installing latest version of {}. {:?}",
-                    &tool.name, add_tool_err
-                ),
-            },
-            None => error!(
-                "Unable to find an asset that matches '{}' for tool {}",
-                &tool.asset_pattern, &tool.name
-            ),
-        }
     }
 
     Ok(())

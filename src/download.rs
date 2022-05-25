@@ -1,6 +1,6 @@
 use {
+    crate::manager::Asset,
     log::*,
-    octocrab::models::repos::Asset,
     std::path::PathBuf,
     tokio::fs::{create_dir_all, write},
 };
@@ -19,7 +19,7 @@ pub async fn download_asset<P: Into<PathBuf>>(
             Err(create_dirs_err) => eyre::bail!(create_dirs_err),
         };
     };
-    match reqwest::get(asset.browser_download_url.as_str()).await {
+    match reqwest::get(asset.download_url.as_str()).await {
         Ok(cd) => match cd.bytes().await {
             Ok(bytes) => match write(&out_file_name, bytes).await {
                 Ok(_) => Ok(out_file_name),

@@ -5,13 +5,18 @@
 //     allow(dead_code, unused_macros, unused_imports, unused_variables)
 // )]
 
+use std::sync::Arc;
+
+use regex::Regex;
+
+use crate::{cli_actions::Patterns, manager::GitHubManager, version::parse_version};
+
 mod archiver;
 mod cli;
 mod cli_actions;
 mod dirs;
 mod download;
 mod environment;
-mod github;
 mod manager;
 mod system;
 mod tool;
@@ -61,15 +66,31 @@ async fn main() -> Result<()> {
             debug!("CLI: Name `{name}`, alias `{:?}`, pattern `{:?}`, filter `{:?}`, pre_release `{pre_release}`, show `{show}`", alias, pattern, filter);
             let system = System::new();
             let mut env = Environment::load(&config_dir, &opts.env).await?;
+            let patterns = Patterns {
+                asset: pattern,
+                file: filter,
+            };
+
+            let re_pattern = Regex::new(r#"^(?P<name>.+?)(?:@(?P<version>.+?))?$"#).unwrap();
+            let captures = re_pattern.captures(&name).unwrap();
+            let name = match captures.name("name") {
+                Some(name) => name.as_str(),
+                None => eyre::bail!("No 'name' found in {name}"),
+            };
+            let requested_version = match captures.name("version") {
+                Some(version) => Some(parse_version(version.as_str())),
+                None => None,
+            };
+
             cli_actions::add_new_tool(
                 &mut env,
-                &name,
+                name,
+                requested_version,
                 &system,
-                pattern,
-                filter,
+                &patterns,
                 alias,
                 show,
-                pre_release,
+                Arc::new(GitHubManager),
             )
             .await?;
         }
@@ -92,6 +113,7 @@ async fn main() -> Result<()> {
                 } else {
                     UpdateType::All
                 },
+                Arc::new(GitHubManager),
             )
             .await?;
         }
@@ -111,7 +133,7 @@ async fn main() -> Result<()> {
             let system = System::new();
             let mut env = Environment::load(&config_dir, &opts.env).await?;
             println!("Syncing versions with {} configuration.", env.name);
-            cli_actions::sync_tools(&mut env, &system).await?;
+            cli_actions::sync_tools(&mut env, &system, Arc::new(GitHubManager)).await?;
         }
     };
     Ok(())

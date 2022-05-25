@@ -1,7 +1,6 @@
 use {
-    crate::{archiver, download, tool::Tool, version::Version},
+    crate::{archiver, download, manager::Asset, tool::Tool, version::Version},
     log::*,
-    octocrab::models::repos::Asset,
     serde::{Deserialize, Serialize},
     serde_json::{from_str, to_string_pretty},
     std::{
@@ -88,7 +87,7 @@ impl Environment {
         name: &'_ str,
         alias: &'_ str,
         version: Version,
-        asset: Asset,
+        asset: &'_ Asset,
         asset_pattern: &'_ str,
         file_pattern: &'_ str,
     ) -> crate::Result<()> {
@@ -104,7 +103,7 @@ impl Environment {
 
         match download::download_asset(&asset, &tool_version_dir).await {
             Ok(asset_path) => {
-                info!("Completed download: {}", asset.browser_download_url);
+                info!("Completed download: {}", asset.download_url);
                 let symlink_dest = Path::new(&self.base_dir).join(alias);
                 let extractor = archiver::determine_extractor(&asset_path);
 
@@ -265,7 +264,7 @@ impl Environment {
                 eyre::bail!(
                     "Failed to download file {} from {}. {:?}",
                     asset.name,
-                    asset.browser_download_url,
+                    asset.download_url,
                     download_err
                 )
             }

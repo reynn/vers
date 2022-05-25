@@ -2099,6 +2099,7 @@ dependencies = [
  "test-case",
  "tokio",
  "toml",
+ "url",
  "walkdir",
 ]
 
