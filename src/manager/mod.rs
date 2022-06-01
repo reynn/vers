@@ -1,9 +1,9 @@
 mod github;
+mod go;
 
-use crate::{system::System, version::Version};
-use async_trait::async_trait;
+use {crate::version::Version, async_trait::async_trait};
 
-pub use github::GitHubManager;
+pub use {github::GitHubManager, go::GoManager};
 
 pub struct Asset {
     pub name: String,
@@ -11,13 +11,16 @@ pub struct Asset {
 }
 
 #[async_trait]
-pub trait Manager: std::fmt::Debug + Sync {
+pub trait Manager: std::fmt::Debug + Sync + Send {
     async fn get_all_versions(&self, name: &'_ str) -> crate::Result<Vec<Version>>;
     async fn get_latest_version(&self, name: &'_ str) -> crate::Result<Version>;
     async fn get_assets_for_version(
         &self,
         name: &'_ str,
         version: &'_ Version,
-        system: &'_ System,
     ) -> crate::Result<Vec<Asset>>;
+    fn name(&self) -> &'static str;
+    fn name_required(&self) -> bool {
+        true
+    }
 }

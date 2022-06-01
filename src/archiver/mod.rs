@@ -13,8 +13,9 @@ use {
 mod tar;
 mod zip;
 
-static ARCHIVE_TYPE_TAR_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r#"^.+\.tar\..*?"#).expect("Unable to compile regex for tar archiver"));
+static ARCHIVE_TYPE_TAR_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r#"^.+\.(tar|gz)\.?.*?"#).expect("Unable to compile regex for tar archiver")
+});
 static ARCHIVE_TYPE_ZIP_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r#"^.+\.zip"#).expect("Unable to compile regex for zip archiver"));
 

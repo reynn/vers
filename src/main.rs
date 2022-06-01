@@ -1,15 +1,4 @@
-// Turn off common dev assertions only for debug builds, release builds will still work as normal
 #![warn(clippy::all)]
-// #![cfg_attr(
-//     debug_assertions,
-//     allow(dead_code, unused_macros, unused_imports, unused_variables)
-// )]
-
-use std::sync::Arc;
-
-use regex::Regex;
-
-use crate::{cli_actions::Patterns, manager::GitHubManager, version::parse_version};
 
 mod archiver;
 mod cli;
@@ -23,8 +12,17 @@ mod tool;
 mod version;
 
 use {
-    crate::{cli::Actions, cli_actions::UpdateType, environment::Environment, system::System},
+    crate::{
+        cli::Actions,
+        cli_actions::{Patterns, UpdateType},
+        environment::Environment,
+        manager::{GitHubManager, GoManager, Manager},
+        system::System,
+        version::parse_version,
+    },
     log::*,
+    regex::Regex,
+    std::sync::Arc,
 };
 
 pub type Result<T> = eyre::Result<T>;
@@ -54,6 +52,19 @@ async fn main() -> Result<()> {
         )?;
     };
 
+    let go_man = GoManager;
+    let go_version = go_man.get_latest_version("").await.unwrap();
+    println!("Latest Go version: {}", go_version.as_tag());
+
+    let manager: Arc<dyn Manager> = if let Some(m) = opts.manager {
+        match m {
+            cli::Managers::GitHub => Arc::new(GitHubManager),
+            cli::Managers::Go => Arc::new(GoManager),
+        }
+    } else {
+        Arc::new(GitHubManager)
+    };
+
     match opts.action {
         Actions::Add {
             name,
@@ -77,22 +88,17 @@ async fn main() -> Result<()> {
                 Some(name) => name.as_str(),
                 None => eyre::bail!("No 'name' found in {name}"),
             };
-            let requested_version = match captures.name("version") {
-                Some(version) => Some(parse_version(version.as_str())),
-                None => None,
-            };
+            let requested_version = captures
+                .name("version")
+                .map(|version| parse_version(version.as_str()));
 
-            cli_actions::add_new_tool(
-                &mut env,
-                name,
-                requested_version,
-                &system,
-                &patterns,
+            let opts = cli_actions::AddOptions {
+                patterns,
+                version: requested_version,
                 alias,
                 show,
-                Arc::new(GitHubManager),
-            )
-            .await?;
+            };
+            cli_actions::add_new_tool(&mut env, name, &system, &opts, manager).await?;
         }
         Actions::Remove { name, all } => {
             let mut env = Environment::load(&config_dir, &opts.env).await?;
@@ -113,7 +119,7 @@ async fn main() -> Result<()> {
                 } else {
                     UpdateType::All
                 },
-                Arc::new(GitHubManager),
+                manager,
             )
             .await?;
         }
@@ -133,7 +139,7 @@ async fn main() -> Result<()> {
             let system = System::new();
             let mut env = Environment::load(&config_dir, &opts.env).await?;
             println!("Syncing versions with {} configuration.", env.name);
-            cli_actions::sync_tools(&mut env, &system, Arc::new(GitHubManager)).await?;
+            cli_actions::sync_tools(&mut env, &system, manager).await?;
         }
     };
     Ok(())

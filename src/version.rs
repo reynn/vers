@@ -1,4 +1,4 @@
-use {log::info, std::fmt::Display};
+use {log::debug, std::fmt::Display};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Version {
@@ -49,7 +49,7 @@ pub fn parse_version(provided_version: &'_ str) -> Version {
         "prerelease" | "pre-release" => Version::PreRelease,
         _ => {
             let provided_version = provided_version.trim_start_matches('v');
-            info!("Parsing version: {}", provided_version);
+            debug!("Parsing version: {}", provided_version);
             if let Ok(parsed_semver) = semver::Version::parse(provided_version) {
                 Version::SemVer(parsed_semver)
             } else {

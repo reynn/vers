@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use bpaf::*;
 
 #[derive(Debug, Clone, Bpaf)]
@@ -11,6 +13,9 @@ pub struct Opts {
     /// A GitHub API token to use authenticated requests to the API
     #[bpaf(long)]
     pub github_api_token: Option<String>,
+    /// determine the manager to use when handling the tool
+    #[bpaf(short, long)]
+    pub manager: Option<Managers>,
     /// Use a local environment
     ///
     /// Files will be stored in the current directory under a "hidden" folder
@@ -18,6 +23,23 @@ pub struct Opts {
     pub local: bool,
     #[bpaf(external(actions))]
     pub action: Actions,
+}
+
+#[derive(Debug, Clone)]
+pub enum Managers {
+    GitHub,
+    Go,
+}
+
+impl FromStr for Managers {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "go" => Ok(Managers::Go),
+            _ => Ok(Managers::GitHub),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Bpaf)]

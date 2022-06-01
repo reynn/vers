@@ -2,20 +2,26 @@
 
 use {
     super::{Asset, Manager},
-    crate::{
-        system::System,
-        version::{self, Version},
-    },
+    crate::version::{self, Version},
     async_trait::async_trait,
 };
 
 #[derive(Debug)]
 pub struct GitHubManager;
 
-#[async_trait]
-impl Manager for GitHubManager {
-    async fn get_all_versions(&self, name: &'_ str) -> crate::Result<Vec<Version>> {
-        let (owner, repo) = self.split_owner_and_repo(name);
+impl GitHubManager {
+    fn split_owner_and_repo(name: &'_ str) -> (String, String) {
+        let split_name = name.split('@').collect::<Vec<_>>()[0];
+        let split_owner_repo = split_name
+            .split('/')
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>();
+        let owner = split_owner_repo.get(0).unwrap();
+        let repo = split_owner_repo.get(1).unwrap();
+        (owner.to_string(), repo.to_string())
+    }
+    async fn all_versions(name: &'_ str) -> crate::Result<Vec<Version>> {
+        let (owner, repo) = Self::split_owner_and_repo(name);
 
         match octocrab::instance()
             .repos(&owner, &repo)
@@ -38,9 +44,8 @@ impl Manager for GitHubManager {
             }
         }
     }
-
-    async fn get_latest_version(&self, name: &'_ str) -> crate::Result<Version> {
-        let (owner, repo) = self.split_owner_and_repo(name);
+    async fn latest_version(name: &'_ str) -> crate::Result<Version> {
+        let (owner, repo) = Self::split_owner_and_repo(name);
 
         match octocrab::instance()
             .repos(&owner, &repo)
@@ -55,14 +60,8 @@ impl Manager for GitHubManager {
             ),
         }
     }
-
-    async fn get_assets_for_version(
-        &self,
-        name: &'_ str,
-        version: &'_ Version,
-        system: &'_ System,
-    ) -> crate::Result<Vec<Asset>> {
-        let (owner, repo) = self.split_owner_and_repo(name);
+    async fn version_assets(name: &'_ str, version: &'_ Version) -> crate::Result<Vec<Asset>> {
+        let (owner, repo) = Self::split_owner_and_repo(name);
         let assets = match octocrab::instance()
             .repos(&owner, &repo)
             .releases()
@@ -89,11 +88,27 @@ impl Manager for GitHubManager {
             }
         };
 
-        Ok(assets
-            .into_iter()
-            .filter_map(|a| Some(a))
-            .map(|a| a.into())
-            .collect())
+        Ok(assets.into_iter().map(|a| a.into()).collect())
+    }
+}
+
+#[async_trait]
+impl Manager for GitHubManager {
+    async fn get_all_versions(&self, name: &'_ str) -> crate::Result<Vec<Version>> {
+        Self::all_versions(name).await
+    }
+    async fn get_latest_version(&self, name: &'_ str) -> crate::Result<Version> {
+        Self::latest_version(name).await
+    }
+    async fn get_assets_for_version(
+        &self,
+        name: &'_ str,
+        version: &'_ Version,
+    ) -> crate::Result<Vec<Asset>> {
+        Self::version_assets(name, version).await
+    }
+    fn name(&self) -> &'static str {
+        "github"
     }
 }
 
@@ -103,18 +118,5 @@ impl From<octocrab::models::repos::Asset> for Asset {
             name: octo_asset.name.clone(),
             download_url: octo_asset.browser_download_url.clone().into(),
         }
-    }
-}
-
-impl GitHubManager {
-    fn split_owner_and_repo(&self, name: &'_ str) -> (String, String) {
-        let split_name = name.split('@').collect::<Vec<_>>()[0];
-        let split_owner_repo = split_name
-            .split('/')
-            .map(|s| s.to_string())
-            .collect::<Vec<_>>();
-        let owner = split_owner_repo.get(0).unwrap();
-        let repo = split_owner_repo.get(1).unwrap();
-        (owner.to_string(), repo.to_string())
     }
 }

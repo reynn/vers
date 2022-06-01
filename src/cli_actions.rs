@@ -4,6 +4,7 @@ use {
         version::parse_version, version::Version,
     },
     log::*,
+    regex::Regex,
     skim::prelude::*,
     std::io::Cursor,
 };
@@ -13,33 +14,42 @@ pub struct Patterns {
     pub file: Option<String>,
 }
 
+pub struct AddOptions {
+    pub patterns: Patterns,
+    pub version: Option<Version>,
+    pub alias: Option<String>,
+    pub show: bool,
+}
+
 pub async fn add_new_tool(
     env: &mut Environment,
-    name: &'_ str,
-    version: Option<Version>,
-    system: &'_ System,
-    patterns: &'_ Patterns,
-    alias: Option<String>,
-    show: bool,
-    manager: Arc<impl Manager>,
+    name: &str,
+    system: &System,
+    opts: &AddOptions,
+    manager: Arc<dyn Manager>,
 ) -> super::Result<()> {
-    let alias = alias.unwrap_or_else(
-        || match name.clone().split('/').collect::<Vec<_>>().get(0) {
-            Some(n) => n.to_string(),
-            None => "".to_string(),
-        },
-    );
-    let user_pattern = patterns.asset.clone().unwrap_or_else(|| "".to_string());
-    let file_pattern = patterns.file.clone().unwrap_or_else(|| alias.clone());
+    let alias =
+        opts.alias
+            .clone()
+            .unwrap_or_else(|| match name.split('/').collect::<Vec<_>>().get(0) {
+                Some(n) => n.to_string(),
+                None => "".to_string(),
+            });
+    let user_pattern = opts
+        .patterns
+        .asset
+        .clone()
+        .unwrap_or_else(|| "".to_string());
+    let file_pattern = opts.patterns.file.clone().unwrap_or_else(|| alias.clone());
     debug!("Name `{name}`, Alias `{alias}`, Pattern `{user_pattern}`, Filter `{file_pattern}`");
 
-    let versions: Vec<Version> = if let Some(v) = version {
-        vec![v]
+    let versions: Vec<Version> = if let Some(v) = &opts.version {
+        vec![v.clone()]
     } else {
         match manager.get_all_versions(name).await {
             Ok(versions) => {
                 // if the user wants a list of the releases show that, otherwise just get the first result
-                if show {
+                if opts.show {
                     let version_list: Vec<String> = versions.iter().map(|v| v.as_tag()).collect();
                     let item_reader =
                         SkimItemReader::default().of_bufread(Cursor::new(version_list.join("\n")));
@@ -72,9 +82,23 @@ pub async fn add_new_tool(
 
     // let manager = Arc::clone(&manager);
     for version in versions.iter() {
-        let tool = Tool::new(name, &alias, &Version::Latest, &user_pattern, &file_pattern);
+        let tool = Tool::new(
+            name,
+            &alias,
+            &Version::Latest,
+            user_pattern.clone().as_str(),
+            &file_pattern,
+        );
 
-        match handle_tool_install(env, &tool, system, Some(version.clone()), manager.clone()).await
+        match handle_tool_install(
+            env,
+            &tool,
+            system,
+            Some(version.clone()),
+            Some(user_pattern.clone()),
+            &manager.clone(),
+        )
+        .await
         {
             Ok(_) => println!("Installation of tool {} complete.", &tool.name),
             Err(install_err) => error!("{:?}", install_err),
@@ -126,14 +150,23 @@ pub async fn update_tools(
     env: &mut Environment,
     system: &'_ System,
     update_type: UpdateType,
-    manager: Arc<impl Manager>,
+    manager: Arc<dyn Manager>,
 ) -> crate::Result<()> {
     match update_type {
         UpdateType::All => {
             let tools: Vec<Tool> = env.tools.to_vec();
             println!("-> Updating all tools...");
             for tool in tools {
-                match handle_tool_install(env, &tool, system, None, manager.clone()).await {
+                match handle_tool_install(
+                    env,
+                    &tool,
+                    system,
+                    None,
+                    Some(tool.asset_pattern.clone()),
+                    &manager.clone(),
+                )
+                .await
+                {
                     Ok(_) => info!("Tool {} complete.", &tool.name),
                     Err(install_err) => error!("{:?}", install_err),
                 }
@@ -152,7 +185,16 @@ pub async fn update_tools(
             if let Some(tool) = tools.iter().find(|t| t.name == split_name[0]) {
                 info!("Tool: {:?}", tool);
 
-                match handle_tool_install(env, tool, system, version, manager.clone()).await {
+                match handle_tool_install(
+                    env,
+                    tool,
+                    system,
+                    version,
+                    Some(tool.asset_pattern.clone()),
+                    &manager.clone(),
+                )
+                .await
+                {
                     Ok(_) => info!("Tool {} has been updated.", &tool.name),
                     Err(install_err) => error!("{:?}", install_err),
                 }
@@ -167,13 +209,26 @@ pub async fn update_tools(
 pub async fn sync_tools(
     env: &mut Environment,
     system: &'_ System,
-    manager: Arc<impl Manager>,
+    manager: Arc<dyn Manager>,
 ) -> crate::Result<()> {
     let tools: Vec<Tool> = env.tools.to_vec();
 
     for tool in tools.iter() {
         let parsed_version = parse_version(&tool.current_version);
-        match handle_tool_install(env, tool, system, Some(parsed_version), manager.clone()).await {
+        println!(
+            "Ensuring {} is installed at version {}",
+            &tool.name, &tool.current_version
+        );
+        match handle_tool_install(
+            env,
+            tool,
+            system,
+            Some(parsed_version),
+            Some(tool.asset_pattern.clone()),
+            &manager.clone(),
+        )
+        .await
+        {
             Ok(_) => info!(
                 "Tool {} has been installed at version {}",
                 &tool.name, tool.current_version
@@ -186,10 +241,11 @@ pub async fn sync_tools(
 
 async fn handle_tool_install(
     env: &mut Environment,
-    tool: &'_ Tool,
-    system: &'_ System,
+    tool: &Tool,
+    system: &System,
     version: Option<Version>,
-    manager: Arc<impl Manager>,
+    asset_pattern: Option<String>,
+    manager: &Arc<dyn Manager>,
 ) -> crate::Result<()> {
     let version = if let Some(version) = version {
         info!("Using provided version {}", version.as_tag());
@@ -206,24 +262,30 @@ async fn handle_tool_install(
     );
     if tool.current_version != version.as_tag() {
         println!("--> Installing tool {}@{}", &tool.name, version.as_tag());
-        match manager
-            .get_assets_for_version(&tool.name, &version, system)
-            .await
-        {
-            Ok(asset) => {
-                match env
+        match manager.get_assets_for_version(&tool.name, &version).await {
+            Ok(assets) => {
+                let asset = assets
+                    .iter()
+                    .find(|a| match asset_pattern.clone() {
+                        Some(ap) => {
+                            let re = Regex::new(&ap).unwrap();
+                            re.is_match(&a.name)
+                        }
+                        None => system.is_match(&a.name),
+                    })
+                    .unwrap();
+                if let Err(e) = env
                     .add_tool(
                         &tool.name,
                         &tool.alias,
                         version,
-                        &asset[0],
+                        asset,
                         &tool.asset_pattern,
                         &tool.file_pattern,
                     )
                     .await
                 {
-                    Ok(_) => {}
-                    Err(_) => {}
+                    eyre::bail!("Failed to add tool to {} environment. {}", env.name, e)
                 }
             }
             Err(assets_err) => {

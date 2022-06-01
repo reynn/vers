@@ -101,7 +101,7 @@ impl Environment {
         let version_tag = version.as_tag();
         let tool_version_dir = tool_dir.clone().join(&version_tag);
 
-        match download::download_asset(&asset, &tool_version_dir).await {
+        match download::download_asset(asset, &tool_version_dir).await {
             Ok(asset_path) => {
                 info!("Completed download: {}", asset.download_url);
                 let symlink_dest = Path::new(&self.base_dir).join(alias);
