@@ -1,5 +1,20 @@
 #![warn(clippy::all)]
 
+use {
+    crate::{
+        cli::Actions,
+        cli_actions::{Patterns, UpdateType},
+        environment::Environment,
+        manager::{GitHubManager, GoManager, Manager},
+        system::System,
+        version::parse_version,
+    },
+    clap::{CommandFactory, Parser},
+    log::*,
+    regex::Regex,
+    std::sync::Arc,
+};
+
 mod archiver;
 mod cli;
 mod cli_actions;
@@ -11,25 +26,20 @@ mod system;
 mod tool;
 mod version;
 
-use {
-    crate::{
-        cli::Actions,
-        cli_actions::{Patterns, UpdateType},
-        environment::Environment,
-        manager::{GitHubManager, GoManager, Manager},
-        system::System,
-        version::parse_version,
-    },
-    log::*,
-    regex::Regex,
-    std::sync::Arc,
-};
-
 pub type Result<T> = eyre::Result<T>;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let opts = cli::opts().run();
+    let opts = match cli::Opts::try_parse() {
+        Ok(args) => args,
+        Err(e) => {
+            if e.kind() == clap::ErrorKind::UnrecognizedSubcommand {
+                eyre::bail!("Unrecognized Subcommand: {:?}", e)
+            } else {
+                return Err(e.into());
+            }
+        }
+    };
 
     env_logger::builder()
         .filter_level(match opts.verbose {
@@ -39,6 +49,7 @@ async fn main() -> Result<()> {
             _ => LevelFilter::Warn,
         })
         .init();
+    println!("{:?}", opts);
 
     let config_dir = dirs::get_default_config_path();
 
@@ -52,13 +63,9 @@ async fn main() -> Result<()> {
         )?;
     };
 
-    let go_man = GoManager;
-    let go_version = go_man.get_latest_version("").await.unwrap();
-    println!("Latest Go version: {}", go_version.as_tag());
-
     let manager: Arc<dyn Manager> = if let Some(m) = opts.manager {
         match m {
-            cli::Managers::GitHub => Arc::new(GitHubManager),
+            cli::Managers::Github => Arc::new(GitHubManager),
             cli::Managers::Go => Arc::new(GoManager),
         }
     } else {
@@ -75,7 +82,7 @@ async fn main() -> Result<()> {
             show,
         } => {
             debug!("CLI: Name `{name}`, alias `{:?}`, pattern `{:?}`, filter `{:?}`, pre_release `{pre_release}`, show `{show}`", alias, pattern, filter);
-            let system = System::new();
+            let system = System::from_system();
             let mut env = Environment::load(&config_dir, &opts.env).await?;
             let patterns = Patterns {
                 asset: pattern,
@@ -109,7 +116,7 @@ async fn main() -> Result<()> {
             cli_actions::list_tools(&env, installed).await?;
         }
         Actions::Update { name } => {
-            let system = System::new();
+            let system = System::from_system();
             let mut env = Environment::load(&config_dir, &opts.env).await?;
             cli_actions::update_tools(
                 &mut env,
@@ -136,11 +143,16 @@ async fn main() -> Result<()> {
             }
         }
         Actions::Sync => {
-            let system = System::new();
+            let system = System::from_system();
             let mut env = Environment::load(&config_dir, &opts.env).await?;
             println!("Syncing versions with {} configuration.", env.name);
             cli_actions::sync_tools(&mut env, &system, manager).await?;
         }
+        Actions::Completion { shell } => {
+            let mut cli = cli::Opts::command();
+            cli_actions::generate_completions(shell, &mut cli);
+        }
     };
+
     Ok(())
 }

@@ -3,10 +3,12 @@ use {
         environment::Environment, manager::Manager, system::System, tool::Tool, version,
         version::parse_version, version::Version,
     },
+    clap::Command,
+    clap_complete::{generate, Generator},
     log::*,
     regex::Regex,
     skim::prelude::*,
-    std::io::Cursor,
+    std::io::{stdout, Cursor},
 };
 
 pub struct Patterns {
@@ -298,4 +300,8 @@ async fn handle_tool_install(
     }
 
     Ok(())
+}
+
+pub fn generate_completions<G: Generator>(gen: G, cmd: &mut Command) {
+    generate(gen, cmd, cmd.get_name().to_string(), &mut stdout())
 }

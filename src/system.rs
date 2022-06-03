@@ -4,14 +4,14 @@ use {
     std::env::consts::{ARCH, OS},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct System {
     pub architecture: PlatformArchitecture,
     pub os: OperatingSystem,
 }
 
 impl System {
-    pub fn new() -> Self {
+    pub fn from_system() -> Self {
         Self {
             architecture: match ARCH {
                 "x86" => PlatformArchitecture::I686,
@@ -43,7 +43,7 @@ impl System {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OperatingSystem {
     Linux,
     Mac,
@@ -64,9 +64,19 @@ impl OperatingSystem {
             }
         }
     }
+
+    pub fn parse(s: &str) -> Self {
+        let s = s.to_lowercase();
+        log::debug!("Parsing {} as OperatingSystem", &s);
+        match &s[..] {
+            "mac" | "macos" => Self::Mac,
+            "windows" => Self::Windows,
+            _ => Self::Linux,
+        }
+    }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PlatformArchitecture {
     I686,
     Amd64,
@@ -89,6 +99,17 @@ impl PlatformArchitecture {
             Self::Arm64 => {
                 Regex::new(r#"(?i).*arm64|aarch64.*"#).expect("Unable to create regex for arm64")
             }
+        }
+    }
+
+    pub fn parse(s: &str) -> Self {
+        let s = s.to_lowercase();
+        log::debug!("Parsing {} as PlatformArchitecture", &s);
+        match &s[..] {
+            "armv6" => Self::Arm32,
+            "x86" => Self::I686,
+            "arm64" => Self::Arm64,
+            _ => Self::Amd64,
         }
     }
 }

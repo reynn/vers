@@ -1,5 +1,9 @@
 //! Implementation of the Manager trait pulling information from GitHub releases
 
+use crate::system::{OperatingSystem, PlatformArchitecture};
+
+use super::AssetType;
+
 use {
     super::{Asset, Manager},
     crate::version::{self, Version},
@@ -114,9 +118,14 @@ impl Manager for GitHubManager {
 
 impl From<octocrab::models::repos::Asset> for Asset {
     fn from(octo_asset: octocrab::models::repos::Asset) -> Self {
+        let architecture = PlatformArchitecture::Amd64;
+        let os = OperatingSystem::Mac;
         Self {
             name: octo_asset.name.clone(),
-            download_url: octo_asset.browser_download_url.clone().into(),
+            download_url: octo_asset.browser_download_url.into(),
+            architecture,
+            operating_system: os,
+            asset_type: AssetType::Archive,
         }
     }
 }

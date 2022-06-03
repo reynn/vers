@@ -1,14 +1,10 @@
+mod assets;
 mod github;
 mod go;
 
 use {crate::version::Version, async_trait::async_trait};
 
-pub use {github::GitHubManager, go::GoManager};
-
-pub struct Asset {
-    pub name: String,
-    pub download_url: String,
-}
+pub use {assets::*, github::GitHubManager, go::GoManager};
 
 #[async_trait]
 pub trait Manager: std::fmt::Debug + Sync + Send {

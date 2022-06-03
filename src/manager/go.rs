@@ -1,20 +1,24 @@
-use scraper::Node;
+use crate::{
+    manager::AssetType,
+    system::{OperatingSystem, PlatformArchitecture},
+};
 
 use {
     super::Asset,
     crate::version::{self, Version},
     async_trait::async_trait,
+    log::*,
     scraper::{Html, Selector},
 };
 
-const GO_VERSION_LIST: &str = "https://go.dev/dl";
+const GO_DEV_BASE: &str = "https://go.dev";
 
 #[derive(Debug)]
 pub struct GoManager;
 
-pub struct GoOpts {
-    version: Option<Version>,
-}
+// pub struct GoOpts {
+//     version: Option<Version>,
+// }
 
 #[async_trait]
 impl super::Manager for GoManager {
@@ -38,7 +42,8 @@ impl super::Manager for GoManager {
 
 impl GoManager {
     async fn all_versions() -> crate::Result<Vec<Version>> {
-        match reqwest::get(GO_VERSION_LIST).await {
+        let dl_list = format!("{}/dl", GO_DEV_BASE);
+        match reqwest::get(&dl_list).await {
             Ok(resp) => {
                 let html_text = resp.text().await?;
                 let html = Html::parse_document(&html_text);
@@ -58,15 +63,12 @@ impl GoManager {
                     })
                     .collect())
             }
-            Err(e) => eyre::bail!(
-                "Failed to get list of versions from {}. {:?}",
-                GO_VERSION_LIST,
-                e
-            ),
+            Err(e) => eyre::bail!("Failed to get list of versions from {}. {:?}", dl_list, e),
         }
     }
     async fn latest_version() -> crate::Result<Version> {
-        match reqwest::get(GO_VERSION_LIST).await {
+        let dl_list = format!("{}/dl", GO_DEV_BASE);
+        match reqwest::get(&dl_list).await {
             Ok(resp) => {
                 let html_text = resp.text().await?;
                 let html = Html::parse_document(&html_text);
@@ -91,25 +93,80 @@ impl GoManager {
             }
             Err(e) => eyre::bail!(
                 "Failed to get latest version of Go from {}. {:?}",
-                GO_VERSION_LIST,
+                dl_list,
                 e
             ),
         }
     }
     async fn version_assets(version: &'_ Version) -> crate::Result<Vec<Asset>> {
-        match reqwest::get(GO_VERSION_LIST).await {
+        let dl_list = format!("{}/dl", GO_DEV_BASE);
+        match reqwest::get(&dl_list).await {
             Ok(resp) => {
-                // let text = resp.text().await?;
-                // let html = Html::parse_document(&text);
-                // let html_selector =
-                //     Selector::parse(&format!("#{} > .download", version.as_tag())).unwrap();
+                let text = resp.text().await?;
+                let document = Html::parse_document(&text);
+                let text_selector = format!(
+                    "#go{} table.downloadtable > tbody > tr",
+                    version.as_tag().replace('.', "\\.")
+                );
+                debug!("Text Selector: {}", text_selector);
+                let selector = Selector::parse(text_selector.as_str()).unwrap();
+                debug!("Parsed Selector {:?}", selector);
 
-                // let list = html
-                //     .select(&html_selector)
-                //     .into_iter()
-                //     .filter_map()
-                //     .collect();
-                Ok(Vec::new())
+                Ok(document
+                    .select(&selector)
+                    .into_iter()
+                    .filter_map(|item| {
+                        let name = if let Some(i) = item
+                            .select(&Selector::parse("td.filename").unwrap())
+                            .into_iter()
+                            .next()
+                        {
+                            i.text().next().unwrap_or_default().to_string()
+                        } else {
+                            return None;
+                        };
+                        let download_url = if let Some(i) =
+                            item.select(&Selector::parse("a.download").unwrap()).next()
+                        {
+                            format!(
+                                "{}{}",
+                                GO_DEV_BASE,
+                                i.value().attr("href").unwrap_or_default()
+                            )
+                        } else {
+                            return None;
+                        };
+                        let s = Selector::parse("td").unwrap();
+                        let mut selections = item.select(&s);
+
+                        Some(Asset {
+                            name,
+                            download_url,
+                            asset_type: AssetType::parse(
+                                if let Some(t) = selections
+                                    .nth(1)
+                                    .map(|i| i.text().next().unwrap_or_default())
+                                {
+                                    t
+                                } else {
+                                    "src"
+                                },
+                            ),
+                            operating_system: OperatingSystem::parse(
+                                selections
+                                    .next()
+                                    .map(|i| i.text().next().unwrap_or_default())
+                                    .unwrap_or_default(),
+                            ),
+                            architecture: PlatformArchitecture::parse(
+                                selections
+                                    .next()
+                                    .map(|i| i.text().next().unwrap_or_default())
+                                    .unwrap_or_default(),
+                            ),
+                        })
+                    })
+                    .collect())
             }
             Err(e) => eyre::bail!("Failed to get assets for Go {}. {:?}", version.as_tag(), e),
         }
