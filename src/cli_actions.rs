@@ -29,7 +29,7 @@ pub async fn add_new_tool(
     system: &System,
     opts: &AddOptions,
     manager: Arc<dyn Manager>,
-) -> super::Result<()> {
+) -> eyre::Result<()> {
     let alias =
         opts.alias
             .clone()
@@ -48,7 +48,7 @@ pub async fn add_new_tool(
     let versions: Vec<Version> = if let Some(v) = &opts.version {
         vec![v.clone()]
     } else {
-        match manager.get_all_versions(name).await {
+        match manager.get_all_versions(name) {
             Ok(versions) => {
                 // if the user wants a list of the releases show that, otherwise just get the first result
                 if opts.show {
@@ -113,12 +113,13 @@ pub async fn remove_tool(
     env: &mut Environment,
     name: &'_ str,
     _remove_all_versions: bool,
-) -> crate::Result<()> {
+    _keep_files: bool,
+) -> eyre::Result<()> {
     info!("Removing {name} from environment. {:?}", env);
     Ok(())
 }
 
-pub async fn list_tools(env: &'_ Environment, installed: bool) -> crate::Result<()> {
+pub async fn list_tools(env: &'_ Environment, installed: bool) -> eyre::Result<()> {
     info!("Listing all tools available. {:?}", env);
     let tools = &env.tools;
 
@@ -153,7 +154,7 @@ pub async fn update_tools(
     system: &'_ System,
     update_type: UpdateType,
     manager: Arc<dyn Manager>,
-) -> crate::Result<()> {
+) -> eyre::Result<()> {
     match update_type {
         UpdateType::All => {
             let tools: Vec<Tool> = env.tools.to_vec();
@@ -212,7 +213,7 @@ pub async fn sync_tools(
     env: &mut Environment,
     system: &'_ System,
     manager: Arc<dyn Manager>,
-) -> crate::Result<()> {
+) -> eyre::Result<()> {
     let tools: Vec<Tool> = env.tools.to_vec();
 
     for tool in tools.iter() {
@@ -248,13 +249,13 @@ async fn handle_tool_install(
     version: Option<Version>,
     asset_pattern: Option<String>,
     manager: &Arc<dyn Manager>,
-) -> crate::Result<()> {
+) -> eyre::Result<()> {
     let version = if let Some(version) = version {
         info!("Using provided version {}", version.as_tag());
         version
     } else {
         info!("Getting version from release tags");
-        manager.get_latest_version(&tool.name).await?
+        manager.get_latest_version(&tool.name)?
     };
 
     info!(
@@ -264,7 +265,7 @@ async fn handle_tool_install(
     );
     if tool.current_version != version.as_tag() {
         println!("--> Installing tool {}@{}", &tool.name, version.as_tag());
-        match manager.get_assets_for_version(&tool.name, &version).await {
+        match manager.get_assets_for_version(&tool.name, &version) {
             Ok(assets) => {
                 let asset = assets
                     .iter()

@@ -1,14 +1,11 @@
-use crate::{
-    manager::AssetType,
-    system::{OperatingSystem, PlatformArchitecture},
-};
-
 use {
-    super::Asset,
-    crate::version::{self, Version},
-    async_trait::async_trait,
     log::*,
-    scraper::{Html, Selector},
+    vers::{
+        manager::{Asset, AssetType, Manager},
+        system::{OperatingSystem, PlatformArchitecture},
+        version::{self, Version},
+    },
+    wasm_bindgen::prelude::*,
 };
 
 const GO_DEV_BASE: &str = "https://go.dev";
@@ -16,36 +13,35 @@ const GO_DEV_BASE: &str = "https://go.dev";
 #[derive(Debug)]
 pub struct GoManager;
 
-// pub struct GoOpts {
-//     version: Option<Version>,
-// }
-
-#[async_trait]
-impl super::Manager for GoManager {
-    async fn get_all_versions(&self, _name: &'_ str) -> crate::Result<Vec<Version>> {
-        Self::all_versions().await
+impl Manager for GoManager {
+    #[wasm_bindgen]
+    fn get_all_versions(&self, _: &'_ str) -> eyre::Result<Vec<Version>> {
+        Self::all_versions()
     }
-    async fn get_latest_version(&self, _name: &'_ str) -> crate::Result<Version> {
-        Self::latest_version().await
+    #[wasm_bindgen]
+    fn get_latest_version(&self, _: &'_ str) -> eyre::Result<Version> {
+        Self::latest_version()
     }
-    async fn get_assets_for_version(
+    #[wasm_bindgen]
+    fn get_assets_for_version(
         &self,
         _name: &'_ str,
         version: &'_ Version,
-    ) -> crate::Result<Vec<Asset>> {
-        Self::version_assets(version).await
+    ) -> eyre::Result<Vec<Asset>> {
+        Self::version_assets(version)
     }
+    #[wasm_bindgen]
     fn name(&self) -> &'static str {
         "go"
     }
 }
 
 impl GoManager {
-    async fn all_versions() -> crate::Result<Vec<Version>> {
+    fn all_versions() -> eyre::Result<Vec<Version>> {
         let dl_list = format!("{}/dl", GO_DEV_BASE);
-        match reqwest::get(&dl_list).await {
+        match reqwest::blocking::get(&dl_list) {
             Ok(resp) => {
-                let html_text = resp.text().await?;
+                let html_text = resp.text()?;
                 let html = Html::parse_document(&html_text);
                 let html_selector = Selector::parse("div.toggle").unwrap();
                 Ok(html
@@ -66,11 +62,11 @@ impl GoManager {
             Err(e) => eyre::bail!("Failed to get list of versions from {}. {:?}", dl_list, e),
         }
     }
-    async fn latest_version() -> crate::Result<Version> {
+    fn latest_version() -> eyre::Result<Version> {
         let dl_list = format!("{}/dl", GO_DEV_BASE);
-        match reqwest::get(&dl_list).await {
+        match reqwest::blocking::get(&dl_list) {
             Ok(resp) => {
-                let html_text = resp.text().await?;
+                let html_text = resp.text()?;
                 let html = Html::parse_document(&html_text);
                 let html_selector = Selector::parse("#stable + .toggleVisible").unwrap();
 
@@ -98,11 +94,11 @@ impl GoManager {
             ),
         }
     }
-    async fn version_assets(version: &'_ Version) -> crate::Result<Vec<Asset>> {
+    fn version_assets(version: &'_ Version) -> eyre::Result<Vec<Asset>> {
         let dl_list = format!("{}/dl", GO_DEV_BASE);
-        match reqwest::get(&dl_list).await {
+        match reqwest::blocking::get(&dl_list) {
             Ok(resp) => {
-                let text = resp.text().await?;
+                let text = resp.text()?;
                 let document = Html::parse_document(&text);
                 let text_selector = format!(
                     "#go{} table.downloadtable > tbody > tr",

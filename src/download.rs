@@ -9,7 +9,7 @@ use {
 pub async fn download_asset<P: Into<PathBuf>>(
     asset: &'_ Asset,
     out_dir: P,
-) -> crate::Result<PathBuf> {
+) -> eyre::Result<PathBuf> {
     let out_file_name: PathBuf = out_dir.into();
     let out_file_name = out_file_name.join(&asset.name);
     info!("Downloading file to {:?}", &out_file_name);

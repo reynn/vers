@@ -2,7 +2,6 @@ use std::path::PathBuf;
 
 use {
     self::{tar::TarArchiver, zip::ZipArchiver},
-    crate::Result,
     async_trait::async_trait,
     log::*,
     once_cell::sync::Lazy,
@@ -21,8 +20,8 @@ static ARCHIVE_TYPE_ZIP_REGEX: Lazy<Regex> =
 
 #[async_trait]
 pub trait Archiver {
-    async fn extract_to(&self, file_path: &'_ Path, out_dir: &'_ Path) -> crate::Result<()>;
-    async fn extract(&self, file_path: &'_ Path) -> crate::Result<()>;
+    async fn extract_to(&self, file_path: &'_ Path, out_dir: &'_ Path) -> eyre::Result<()>;
+    async fn extract(&self, file_path: &'_ Path) -> eyre::Result<()>;
 }
 
 pub fn determine_extractor(file_path: &'_ Path) -> Option<Box<dyn Archiver>> {
@@ -43,7 +42,7 @@ pub async fn handle_file_extraction(
     archiver: Box<dyn Archiver>,
     input_file: &'_ Path,
     output_dir: Option<PathBuf>,
-) -> Result<()> {
+) -> eyre::Result<()> {
     if let Some(out_dir) = output_dir {
         archiver.extract_to(input_file, &out_dir).await
     } else {

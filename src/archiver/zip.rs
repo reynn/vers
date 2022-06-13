@@ -10,7 +10,7 @@ pub struct ZipArchiver;
 
 #[async_trait]
 impl Archiver for ZipArchiver {
-    async fn extract_to(&self, file_path: &'_ Path, out_dir: &'_ Path) -> crate::Result<()> {
+    async fn extract_to(&self, file_path: &'_ Path, out_dir: &'_ Path) -> eyre::Result<()> {
         let mut cmd = Command::new("unzip");
         cmd.stdout(Stdio::null());
         cmd.args(&[
@@ -29,7 +29,7 @@ impl Archiver for ZipArchiver {
         }
     }
 
-    async fn extract(&self, file_path: &'_ Path) -> crate::Result<()> {
+    async fn extract(&self, file_path: &'_ Path) -> eyre::Result<()> {
         self.extract_to(file_path, Path::new(".")).await
     }
 }

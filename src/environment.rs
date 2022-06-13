@@ -2,7 +2,7 @@ use {
     crate::{archiver, download, manager::Asset, tool::Tool, version::Version},
     log::*,
     serde::{Deserialize, Serialize},
-    serde_json::{from_str, to_string_pretty},
+    toml::{from_str, to_string_pretty},
     std::{
         os::unix::prelude::PermissionsExt,
         path::{Path, PathBuf},
@@ -10,12 +10,6 @@ use {
     tokio::{fs::read_to_string, process::Command},
     walkdir::{DirEntry, WalkDir},
 };
-
-pub trait Env {
-    fn add_tool(&self, name: &'_ str, version: &'_ Version, asset: &'_ Asset) -> crate::Result<()>;
-    fn remove_tool(&self, name: &'_ str) -> crate::Result<()>;
-    fn change_tool_version(&self, name: &'_ str, new_version: &'_ Version) -> crate::Result<()>;
-}
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Environment {
@@ -29,14 +23,14 @@ impl Drop for Environment {
     fn drop(&mut self) {
         let out_file = Path::new(&self.base_dir).parent().unwrap();
         let out_file = out_file.join(format!("{}.json", &self.name));
-        info!("Writing {} environment file to {:?}", &self.name, out_file);
+        debug!("Writing {} environment file to {:?}", &self.name, out_file);
         let contents = to_string_pretty(&self).unwrap();
         std::fs::write(out_file, contents).unwrap();
     }
 }
 
 impl Environment {
-    pub async fn load<P: Into<PathBuf>>(config_dir: P, name: &'_ str) -> super::Result<Self> {
+    pub async fn load<P: Into<PathBuf>>(config_dir: P, name: &'_ str) -> eyre::Result<Self> {
         let config_dir: PathBuf = config_dir.into();
         let env_dir = config_dir.join("envs");
         if !env_dir.exists() {
@@ -47,7 +41,7 @@ impl Environment {
                 }
             }
         }
-        let env_path = env_dir.join(format!("{}.json", name));
+        let env_path = env_dir.join(format!("{}.toml", name));
         match read_to_string(&env_path).await {
             Ok(file_contents) => match from_str::<Self>(&file_contents) {
                 Ok(mut res) => {
@@ -90,7 +84,7 @@ impl Environment {
         asset: &'_ Asset,
         asset_pattern: &'_ str,
         file_pattern: &'_ str,
-    ) -> crate::Result<()> {
+    ) -> eyre::Result<()> {
         let tool_dir = Path::new(&self.base_dir)
             .parent()
             .unwrap()
