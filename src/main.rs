@@ -25,14 +25,9 @@ pub type Result<T> = eyre::Result<T>;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let opts = cli::opts().run();
+    let opts = cli::new();
     env_logger::builder()
-        .filter_level(match opts.verbose {
-            3 => LevelFilter::Trace,
-            2 => LevelFilter::Debug,
-            1 => LevelFilter::Info,
-            _ => LevelFilter::Warn,
-        })
+        .filter_level(opts.verbose.log_level_filter())
         .init();
 
     let config_dir = dirs::get_default_config_path();
