@@ -5,6 +5,9 @@
 //     allow(dead_code, unused_macros, unused_imports, unused_variables)
 // )]
 
+use clap::Command;
+use clap_complete::Generator;
+
 mod archiver;
 mod cli;
 mod cli_actions;
@@ -106,6 +109,14 @@ async fn main() -> Result<()> {
             println!("Syncing versions with {} configuration.", env.name);
             cli_actions::sync_tools(&mut env, &system).await?;
         }
+        Actions::Completions { shell } => {
+            let mut cmd = cli::Opts::cmd();
+            print_completions(shell, &mut cmd)
+        }
     };
     Ok(())
+}
+
+fn print_completions<G: Generator>(gen: G, cmd: &mut Command) {
+    clap_complete::generate(gen, cmd, cmd.get_name().to_string(), &mut std::io::stdout())
 }

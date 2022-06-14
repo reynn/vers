@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use {
     self::{tar::TarArchiver, zip::ZipArchiver},
     crate::Result,
@@ -7,7 +5,7 @@ use {
     log::*,
     once_cell::sync::Lazy,
     regex::Regex,
-    std::path::Path,
+    std::path::{Path, PathBuf},
 };
 
 mod tar;

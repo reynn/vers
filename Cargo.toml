@@ -14,7 +14,8 @@ identifier = "dev.reynn.vers"
 [dependencies]
 async-trait = "0.1"
 # bpaf = { version = "0.4", features = ["derive"] }
-clap = { version = "3.1", features = ["derive"] }
+clap = { version = "3.2", features = ["derive"] }
+clap_complete = "3.2"
 clap-verbosity-flag = "1.0"
 directories-next = "2.0"
 env_logger = "0.9"
