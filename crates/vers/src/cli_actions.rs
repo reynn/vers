@@ -8,15 +8,19 @@ use {
     std::io::Cursor,
 };
 
+pub struct AddOpts {
+    pub user_pattern: Option<String>,
+    pub file_pattern: Option<String>,
+    pub alias: Option<String>,
+    pub show: bool,
+    pub pre_release: bool,
+}
+
 pub async fn add_new_tool(
     env: &mut Environment,
     name: &'_ str,
     system: &'_ System,
-    user_pattern: Option<String>,
-    file_pattern: Option<String>,
-    alias: Option<String>,
-    show: bool,
-    pre_release: bool,
+    opts: &'_ AddOpts,
 ) -> super::Result<()> {
     let split_name: Vec<&str> = name.split('@').collect();
     let org_repo = if split_name.len() > 1 {
@@ -27,25 +31,23 @@ pub async fn add_new_tool(
     let split_org_repo: Vec<&str> = org_repo.split('/').collect();
     let owner = split_org_repo[0];
     let repo = split_org_repo[1];
-    let alias = alias.unwrap_or_else(|| repo.to_string());
-    let user_pattern = user_pattern.unwrap_or_else(|| "".to_string());
-    let file_pattern = file_pattern.unwrap_or_else(|| alias.clone());
+    let alias = opts.alias.clone().unwrap_or_else(|| repo.to_string());
+    let user_pattern = opts.user_pattern.clone().unwrap_or_else(|| "".to_string());
+    let file_pattern = opts.file_pattern.clone().unwrap_or_else(|| alias.clone());
     info!("Owner `{owner}`, Repo `{repo}`, Alias `{alias}`, Pattern `{user_pattern}`, Filter `{file_pattern}`");
 
     let versions: Vec<String> = if split_name.len() > 1 {
         vec![split_name[1].to_string()]
     } else {
-        let versions = github::get_repo_releases(owner, repo, pre_release)
-            .await
-            .unwrap();
+        let versions = github::get_repo_releases(owner, repo, opts.pre_release).await?;
 
         // if the user wants a list of the releases show that, otherwise just get the first result
-        if show {
-            let item_reader =
-                SkimItemReader::default().of_bufread(Cursor::new(versions.join("\n")));
+        if opts.show {
+            let item_cursor = Cursor::new(versions.join("\n"));
+            let item_reader = SkimItemReader::default().of_bufread(item_cursor);
             Skim::run_with(
                 &SkimOptionsBuilder::default()
-                    .height(Some("75%"))
+                    .height(Some("60%"))
                     .multi(true)
                     .reverse(true)
                     .build()
@@ -139,7 +141,7 @@ pub async fn update_tools(
                 }
             }
             Ok(())
-        }
+        },
         UpdateType::Specific(tool_name) => {
             println!("-> Updating {tool_name}...");
             let tools = env.tools.to_vec();
@@ -160,7 +162,7 @@ pub async fn update_tools(
                 error!("{} is not found in the environment.", tool_name);
             }
             Ok(())
-        }
+        },
     }
 }
 
@@ -213,7 +215,7 @@ async fn handle_tool_install(
                     version.as_tag(),
                     release_err
                 )
-            }
+            },
         };
 
         match github::get_platform_specific_asset(&release, system, &tool.asset_pattern) {
