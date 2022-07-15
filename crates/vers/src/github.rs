@@ -58,7 +58,7 @@ pub async fn get_specific_release_for_repo(
         {
             Ok(tagged_release) => Ok(tagged_release),
             Err(_) => {
-                error!(
+                debug!(
                     "Unable to get release {} for {}/{}.",
                     version.as_tag(),
                     owner,

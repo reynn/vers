@@ -1,0 +1,13 @@
+[package]
+authors = ["Nic Patterson <nic@reynn.dev>"]
+edition = "2021"
+license = "MIT"
+name = "vers-golang"
+version = "0.1.0"
+
+[dependencies]
+eyre = "0.6"
+vers-plugin = { path = "../../crates/vers-plugin" }
+
+[lib]
+crate-type = ["cdylib"]
