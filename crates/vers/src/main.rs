@@ -41,8 +41,10 @@ fn main() -> Result<()> {
         .init();
 
     println!("------------------------------");
-    execute_wasm_test("target/wasm32-wasi/debug/vers_github.wasm")?;
-    println!("------------------------------");
+    ["github", "golang"].iter().for_each(|plugin| {
+        execute_wasm_test(format!("target/wasm32-wasi/debug/vers_{}.wasm", plugin)).unwrap();
+        println!("------------------------------");
+    });
 
     // std::process::exit(1);
     // let config_dir = dirs::get_default_config_path();

@@ -1,2 +1,6 @@
 [workspace]
 members = ["crates/*", "plugins/github", "plugins/golang"]
+
+[profile.release]
+lto = true
+strip = true

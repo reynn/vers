@@ -78,16 +78,6 @@ writefile ${data_dir}/VERSION ${CARGO_MAKE_CRATE_VERSION}
 '''
 script_runner = "@duckscript"
 
-[tasks.launch]
-args = [
-  "run",
-  "--",
-  "--data-dir",
-  "${CARGO_TARGET_DIR}/dev-data/",
-  "@@split(CARGO_MAKE_TASK_ARGS,;)",
-]
-command = "cargo"
-
 # Simple clippy tweak
 [tasks.clippy]
 args = [

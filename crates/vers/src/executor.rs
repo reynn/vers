@@ -1,9 +1,7 @@
-use wasmer::ValueType;
-
 use {
     crate::version::Version,
     std::path::PathBuf,
-    wasmer::{imports, Instance, Module, Store, Value},
+    wasmer::{imports, Instance, Module, Store, Value, ValueType},
     wasmer_compiler_cranelift::Cranelift,
     wasmer_engine_universal::Universal,
     wasmer_wasi::WasiState,
@@ -21,13 +19,13 @@ pub fn execute_wasm_latest_version<P: Into<PathBuf>>(mod_path: P) -> crate::Resu
 
 pub fn execute_wasm_test<P: Into<PathBuf>>(mod_path: P) -> crate::Result<()> {
     let mod_path: PathBuf = mod_path.into();
-    execute_wasm_module(&mod_path, "run", &["hello world"])?;
+    execute_wasm_module(&mod_path, "run", Some(&["hello world"]))?;
     Ok(())
 }
 
 pub fn execute_wasm_list_versions<P: Into<PathBuf>>(mod_path: P) -> crate::Result<Vec<Version>> {
     let mod_path: PathBuf = mod_path.into();
-    match execute_wasm_module(&mod_path, "list", &[]) {
+    match execute_wasm_module(&mod_path, "list", None) {
         Ok(wasm_mod_results) => {
             log::debug!("results: {:?}", wasm_mod_results);
             Ok(Vec::new())
@@ -45,7 +43,7 @@ pub fn execute_wasm_list_versions<P: Into<PathBuf>>(mod_path: P) -> crate::Resul
 fn execute_wasm_module(
     mod_path: &'_ PathBuf,
     fn_name: &'_ str,
-    fn_args: &[&str],
+    fn_args: Option<&[&str]>,
 ) -> crate::Result<Box<[Value]>> {
     let mod_path: PathBuf = mod_path.into();
 
@@ -55,7 +53,9 @@ fn execute_wasm_module(
     let module = Module::new(&store, &wasm_mod)?;
 
     let module_file_name = mod_path.file_stem().unwrap_or_default().to_str().unwrap();
-    let mut wasi_env = WasiState::new(module_file_name).args(fn_args).finalize()?;
+    let mut wasi_env = WasiState::new(module_file_name)
+        .args(fn_args.unwrap_or_default())
+        .finalize()?;
 
     let import_object = wasi_env.import_object(&module)?;
     let instance = Instance::new(&module, &import_object)?;
