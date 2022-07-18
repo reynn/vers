@@ -38,8 +38,11 @@ $ vers add cli/cli --alias gh --file-filter '.+macos.+'
 The last important thing for the add feature is using a `--file-filter (short: -f)` this is used to search for the resulting binary once the asset down is complete and extracted, or not. This defaults to the alias if provided or the repository name.
 
 ```shell
-
+# --file-filter is also a regular expression
+$ vers add jesseduffield/lazygit --alias lg --file-filter '^lg$'
 ```
+
+Since the repo name is `lazygit` but the actual binary name is `lg` the filter needs to be provided so `vers` can find the extracted binary.
 
 ## Environments
 
