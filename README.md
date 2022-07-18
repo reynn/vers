@@ -32,10 +32,10 @@ Vers has a method to auto detect the asset from the release that is appropriate 
 
 ```shell
 # --pattern is a regular expression
-$ vers add cli/cli --alias gh --pattern '.+macos.+'
+$ vers add cli/cli --alias gh --file-filter '.+macos.+'
 ```
 
-The last important thing for the add feature is using a `--filter (short: -f)` this is used to search for the resulting binary once the asset down is complete and extracted, or not. This defaults to the alias if provided or the repository name.
+The last important thing for the add feature is using a `--file-filter (short: -f)` this is used to search for the resulting binary once the asset down is complete and extracted, or not. This defaults to the alias if provided or the repository name.
 
 ```shell
 
@@ -53,28 +53,18 @@ $ vers --env betas add cli/cli --alias gh-beta --pre-release
 ## Directory Structure
 
 ```text
-Permissions Size User  Date Modified    Name
- /Users/reynn/Library/Application Support/dev.reynn.vers
+ /Users/<USER>/Library/Application Support/dev.reynn.vers
 ├──  envs
 │  ├──  global
-│  │  └──  # symlinks here to the correct version of the tool under ../tools
+│  │  └──  # symlinks here to the correct version of the tool under ../../tools
 │  └──  global.json
 └──  tools
-   ├──  bitwarden
-   │  └──  cli
-   │     └──  1.22.1
-   ├──  bootandy
-   │  └──  dust
-   │     └──  0.8.1-alpha.2
    ├──  BurntSushi
    │  └──  RipGrep
    │     └──  13.0.0
    ├──  charmbracelet
    │  └──  glow
    │     └──  1.4.1
-   ├──  chmln
-   │  └──  sd
-   │     └──  0.7.6
    ├──  ClementTsang
    │  └──  bottom
    │     ├──  0.6.8
@@ -84,15 +74,6 @@ Permissions Size User  Date Modified    Name
    │     ├──  2.9.0
    │     ├──  2.10.0
    │     └──  2.10.1
-   ├──  dalance
-   │  └──  procs
-   │     └──  0.12.2
-   ├──  denisidoro
-   │  └──  navi
-   │     └──  2.19.0
-   ├──  derailed
-   │  └──  k9s
-   │     └──  0.25.18
    ├──  digitalocean
    │  └──  doctl
    │     └──  1.75.0
@@ -102,9 +83,6 @@ Permissions Size User  Date Modified    Name
    ├──  gohugoio
    │  └──  hugo
    │     └──  0.98.0
-   ├──  helix-editor
-   │  └──  helix
-   │     └──  22.03
    ├──  jesseduffield
    │  └──  lazygit
    │     ├──  0.34
@@ -114,12 +92,6 @@ Permissions Size User  Date Modified    Name
    ├──  k0sproject
    │  └──  k0sctl
    │     └──  0.13.0-rc.2
-   ├──  koalaman
-   │  └──  shellcheck
-   │     └──  0.8.0
-   ├──  kubernetes-sigs
-   │  └──  kustomize
-   │     └──  kustomize
    ├──  lotabout
    │  └──  skim
    │     └──  0.9.4
@@ -133,9 +105,6 @@ Permissions Size User  Date Modified    Name
    ├──  ogham
    │  └──  exa
    │     └──  0.10.1
-   ├──  orhun
-   │  └──  git-cliff
-   │     └──  0.7.0
    ├──  sharkdp
    │  ├──  bat
    │  │  └──  0.21.0
