@@ -12,12 +12,6 @@ use {
     walkdir::{DirEntry, WalkDir},
 };
 
-pub trait Env {
-    fn add_tool(&self, name: &'_ str, version: &'_ Version, asset: &'_ Asset) -> crate::Result<()>;
-    fn remove_tool(&self, name: &'_ str) -> crate::Result<()>;
-    fn change_tool_version(&self, name: &'_ str, new_version: &'_ Version) -> crate::Result<()>;
-}
-
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Environment {
     pub name: String,

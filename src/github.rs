@@ -58,12 +58,6 @@ pub async fn get_specific_release_for_repo(
         {
             Ok(tagged_release) => Ok(tagged_release),
             Err(_) => {
-                error!(
-                    "Unable to get release {} for {}/{}.",
-                    version.as_tag(),
-                    owner,
-                    repo
-                );
                 match octo
                     .repos(owner, repo)
                     .releases()

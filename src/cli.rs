@@ -1,98 +1,140 @@
-use bpaf::*;
+use {
+    clap::{Parser, Subcommand, ValueEnum},
+    clap_verbosity_flag::Verbosity,
+    std::{fmt::Display, path::PathBuf},
+};
 
-#[derive(Debug, Clone, Bpaf)]
-#[bpaf(options)]
+#[derive(Debug, Clone, Parser)]
+#[clap(author, version, about)]
 pub struct Opts {
-    #[bpaf(external(verbose))]
-    pub verbose: usize,
+    #[clap(flatten)]
+    pub verbose: Verbosity,
+    /// Where to store the data application data
+    #[clap(short,long, value_parser, value_hint = clap::ValueHint::DirPath)]
+    pub data_dir: Option<PathBuf>,
     /// Environment where the tool will be installed to
-    #[bpaf(short, long, fallback("global".to_string()))]
+    #[clap(short, long, value_parser, default_value = "global")]
     pub env: String,
     /// A GitHub API token to use authenticated requests to the API
-    #[bpaf(long)]
+    #[clap(long, value_parser)]
     pub github_api_token: Option<String>,
     /// Use a local environment
     ///
     /// Files will be stored in the current directory under a "hidden" folder
-    #[bpaf(short, long, fallback(false))]
+    #[clap(short, long, value_parser)]
     pub local: bool,
-    #[bpaf(external(actions))]
+    #[clap(subcommand)]
     pub action: Actions,
 }
 
-#[derive(Debug, Clone, Bpaf)]
+impl Opts {
+    pub fn new() -> Opts {
+        Opts::parse()
+    }
+}
+
+#[derive(Debug, Clone, Subcommand)]
 pub enum Actions {
     /// Add a tool to the designated environment
-    #[bpaf(command("add"))]
     Add {
-        /// name of the tool to install to the environment
+        /// name of the tool to install to the environment.
         ///
         /// To install a specific version use name@version, for example:
-        /// `cli/cli@v2.4.0` version should be a release tag
-        #[bpaf(positional("NAME"))]
+        /// `cli/cli@v2.4.0` version should be a release tag.
+        #[clap(value_parser)]
         name: String,
-        /// Alias to use instead of the repository name
+        /// Alias to use instead of the repository name.
         ///
-        /// This is how the tool will be called from the command line
-        #[bpaf(short, long)]
+        /// This is how you will call the tool on the command line.
+        #[clap(short = 'A', long, value_parser)]
         alias: Option<String>,
-        /// Pattern used to determine which file from the release to download
+        /// Pattern used to determine which file from the release to download.
         ///
         /// This can be used to override the autodetect mechanism to determine which assets to
-        /// download
-        #[bpaf(short, long)]
-        pattern: Option<String>,
-        /// Filter used to find the executable to link into the environment
-        #[bpaf(short, long)]
-        filter: Option<String>,
-        /// Allow install of pre-release versions of the tool
-        #[bpaf(short('P'), long, fallback(false))]
+        /// download.
+        #[clap(short, long, value_parser)]
+        asset_pattern: Option<String>,
+        /// Filter used to find the executable to link into the environment.
+        #[clap(short, long, value_parser)]
+        file_filter: Option<String>,
+        /// Allow install of pre-release versions of the tool.
+        ///
+        /// When `show` is provided this includes pre-release versions in the list,
+        /// When it is not the most recent version is selected, that could be a pre-release or
+        /// official release depending on release date.
+        #[clap(short = 'P', long, value_parser)]
         pre_release: bool,
         /// Show available versions
-        #[bpaf(short('S'), long, fallback(false))]
+        ///
+        /// Shows a list of versions available to install, multiple versions can be selected, the
+        /// first selected will be set up to use in the environment.
+        #[clap(short = 'S', long, value_parser)]
         show: bool,
     },
     /// Remove a tool from the designated environment
-    #[bpaf(command("remove"))]
     Remove {
         /// name of the tool to remove from the environment
-        #[bpaf(positional("NAME"))]
+        #[clap(value_parser)]
         name: String,
-        /// Remove all versions of a tool. Default is to delete the currently installed version
-        #[bpaf(short, long, fallback(false))]
+        /// Remove all versions of a tool. Default is to delete the version used by the environment
+        /// only.
+        #[clap(short, long, value_parser)]
         all: bool,
+        /// Removes the symlink only while leaving the downloaded assets in tact for reuse later
+        #[clap(short, long, value_parser)]
+        link_only: bool,
     },
     /// List tools available in the designated environment
-    #[bpaf(command("list"))]
     List {
-        #[bpaf(short, long, fallback(false))]
+        /// List all installed versions of tools available to the environment instead of just the
+        /// currently used one.
+        #[clap(short, long, value_parser)]
         installed: bool,
+        /// Control how the list is output to the console
+        #[clap(short, long, value_parser, default_value_t = ListOutputType::Table)]
+        output: ListOutputType,
     },
-    /// sync all version information with listed in the env config file
-    #[bpaf(command("sync"))]
+    /// sync all version information with listed in the env config file.
     Sync,
-    /// Update tools to the latest version
-    #[bpaf(command("update"))]
+    /// Update tools to the latest version available from GitHub.
     Update {
-        #[bpaf(positional("NAME"))]
+        /// Which tool to upgrade, when omitted all tools in the environment will be upgraded.
+        #[clap(value_parser)]
         name: Option<String>,
     },
-    /// show the exports required for setup
-    #[bpaf(command("env"))]
+    /// Generate shell completions for Vers to enable tab completions.
+    Completions {
+        /// the shell to generate completions for.
+        #[clap(short, long, value_parser)]
+        shell: clap_complete::Shell,
+    },
+    /// show the exports required for setup.
     Env {
-        #[bpaf(short, long)]
+        /// Name of the environment.
+        #[clap(short, long, value_parser)]
         name: Option<String>,
-        #[bpaf(short, long)]
+        /// Prints out a command to set the environment path in the shells environment.
+        #[clap(short, long, value_parser)]
         shell: String,
+        /// Output just the bath to the environment rather than a setup string.
+        #[clap(short, long, value_parser)]
+        bare_path: bool,
     },
 }
 
-fn verbose() -> Parser<usize> {
-    short('v')
-        .long("verbose")
-        .help("Increase the verbosity of output\nSpecify no more than 3 times\n-v -v -v or -vvv")
-        .req_flag(())
-        .many()
-        .map(|xs| xs.len())
-        .guard(|&x| x <= 3, "Cannot have more than 3 levels of verbosity")
+#[derive(Debug, Clone, ValueEnum)]
+pub enum ListOutputType {
+    Table,
+    Text,
+    Json,
+}
+
+impl Display for ListOutputType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            ListOutputType::Table => write!(f, "table"),
+            ListOutputType::Text => write!(f, "text"),
+            ListOutputType::Json => write!(f, "json"),
+        }
+    }
 }

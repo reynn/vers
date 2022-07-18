@@ -1,19 +1,28 @@
 use {
     crate::{
-        environment::Environment, github, system::System, tool::Tool, version::parse_version,
+        cli, environment::Environment, github, system::System, tool::Tool, version::parse_version,
         version::Version,
     },
+    clap::CommandFactory,
     log::*,
+    serde::Serialize,
     skim::prelude::*,
-    std::io::Cursor,
+    std::{
+        io::{self, Cursor},
+        path::{Path, PathBuf},
+    },
+    tabled::{object::Segment, Alignment, Footer, Header, Modify, Style, Table, Tabled},
 };
+pub struct Patterns {
+    pub asset: Option<String>,
+    pub file: Option<String>,
+}
 
 pub async fn add_new_tool(
     env: &mut Environment,
     name: &'_ str,
     system: &'_ System,
-    user_pattern: Option<String>,
-    file_pattern: Option<String>,
+    patterns: Patterns,
     alias: Option<String>,
     show: bool,
     pre_release: bool,
@@ -28,9 +37,11 @@ pub async fn add_new_tool(
     let owner = split_org_repo[0];
     let repo = split_org_repo[1];
     let alias = alias.unwrap_or_else(|| repo.to_string());
-    let user_pattern = user_pattern.unwrap_or_else(|| "".to_string());
-    let file_pattern = file_pattern.unwrap_or_else(|| alias.clone());
-    info!("Owner `{owner}`, Repo `{repo}`, Alias `{alias}`, Pattern `{user_pattern}`, Filter `{file_pattern}`");
+
+    let asset_pattern = &patterns.asset.unwrap_or_else(|| "".to_string());
+    let file_pattern = &patterns.file.unwrap_or_else(|| alias.clone());
+
+    info!("Owner `{owner}`, Repo `{repo}`, Alias `{alias}`, Pattern `{asset_pattern}`, Filter `{file_pattern}`");
 
     let versions: Vec<String> = if split_name.len() > 1 {
         vec![split_name[1].to_string()]
@@ -72,8 +83,8 @@ pub async fn add_new_tool(
             org_repo,
             &alias,
             &Version::Latest,
-            &user_pattern,
-            &file_pattern,
+            asset_pattern,
+            file_pattern,
         );
 
         match handle_tool_install(env, &tool, system, Some(parsed_version)).await {
@@ -87,35 +98,108 @@ pub async fn add_new_tool(
 pub async fn remove_tool(
     env: &mut Environment,
     name: &'_ str,
-    _remove_all_versions: bool,
+    remove_all_versions: bool,
 ) -> crate::Result<()> {
-    info!("Removing {name} from environment. {:?}", env);
-    Ok(())
+    if let Some(env_tool) = env.tools.iter().find(|t| t.name == name) {
+        info!("Removing {name} from environment. {}", &env.name);
+        let env_path = Path::new(&env.base_dir);
+
+        let link_path = get_tool_link_path(env_path, &env.name, env_tool);
+        if link_path.exists() {
+            debug!("Removing symlink {:?}", &link_path);
+            std::fs::remove_file(link_path)?;
+        }
+
+        if remove_all_versions {
+            let tool_path = get_tool_download_dir(env_path, env_tool);
+            std::fs::remove_dir_all(tool_path)?;
+        } else {
+            let tool_path = get_tool_version_download_dir(env_path, env_tool);
+            debug!("Removing tool directory {:?}", &tool_path);
+            std::fs::remove_dir_all(&tool_path)?;
+        }
+
+        let tool_idx = env.tools.iter().position(|t| t.name == name).unwrap();
+        debug!("Found {} at index {}, removing...", name, tool_idx);
+        env.tools.swap_remove(tool_idx);
+        Ok(())
+    } else {
+        eyre::bail!("{} is not found in the {} environment.", name, env.name)
+    }
 }
 
-pub async fn list_tools(env: &'_ Environment, installed: bool) -> crate::Result<()> {
+pub async fn list_tools(
+    env: &'_ Environment,
+    installed: bool,
+    output_type: cli::ListOutputType,
+) -> crate::Result<()> {
     info!("Listing all tools available. {:?}", env);
     let tools = &env.tools;
 
-    if !tools.is_empty() {
-        if installed {
-            tools.iter().for_each(|tool| {
-                tool.installed_versions
-                    .iter()
-                    .for_each(|installed_version| println!("{}@{}", tool.name, installed_version));
-            })
-        } else {
-            tools
-                .iter()
-                .for_each(|tool| println!("{}@{}", tool.name, tool.current_version));
-        }
-        Ok(())
-    } else {
-        eyre::bail!(
-            "No tools currently installed in the {} environment",
-            env.name
-        )
+    if tools.is_empty() {
+        eyre::bail!("no tools installed for environment ({})", env.name);
     }
+
+    #[derive(Tabled, Serialize, PartialEq, PartialOrd, Eq, Ord)]
+    struct ListTool<'a> {
+        #[tabled(rename = "Name")]
+        name: &'a str,
+        #[tabled(rename = "Alias")]
+        alias: &'a str,
+        #[tabled(rename = "Version")]
+        version: &'a str,
+    }
+    impl<'a> std::fmt::Display for ListTool<'a> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}@{}", self.name, self.version)
+        }
+    }
+
+    let mut l: Vec<ListTool> = tools
+        .iter()
+        .flat_map(|t| {
+            if installed {
+                t.installed_versions
+                    .iter()
+                    .map(|tt| ListTool {
+                        name: &t.name,
+                        alias: &t.alias,
+                        version: tt,
+                    })
+                    .collect()
+            } else {
+                vec![ListTool {
+                    name: &t.name,
+                    alias: &t.alias,
+                    version: &t.current_version,
+                }]
+            }
+        })
+        .collect();
+
+    l.sort();
+    match output_type {
+        cli::ListOutputType::Table => {
+            println!(
+                "{}",
+                Table::new(&l)
+                    .with(Header(if installed {
+                        "All Installed Versions"
+                    } else {
+                        "Current Versions Only"
+                    }))
+                    .with(Footer(format!("{} tools installed", l.len())))
+                    .with(Modify::new(Segment::all()).with(Alignment::center()))
+                    .with(Style::rounded())
+            );
+        }
+        cli::ListOutputType::Text => l.iter().for_each(|t| println!("{}", t)),
+        cli::ListOutputType::Json => {
+            println!("{}", serde_json::to_string_pretty(&l)?)
+        }
+    }
+
+    Ok(())
 }
 
 pub enum UpdateType {
@@ -180,6 +264,12 @@ pub async fn sync_tools(env: &mut Environment, system: &'_ System) -> crate::Res
     Ok(())
 }
 
+pub fn generate_completions(shell: clap_complete::Shell) {
+    let mut cmd = cli::Opts::command();
+    let cmd_name = cmd.get_name().to_string();
+    clap_complete::generate(shell, &mut cmd, cmd_name, &mut io::stdout())
+}
+
 async fn handle_tool_install(
     env: &mut Environment,
     tool: &'_ Tool,
@@ -242,4 +332,22 @@ async fn handle_tool_install(
     }
 
     Ok(())
+}
+
+fn get_tool_link_path(base_path: &Path, env_name: &str, tool: &Tool) -> PathBuf {
+    base_path.join("envs").join(env_name).join(&tool.alias)
+}
+
+fn get_tool_version_download_dir(base_path: &Path, tool: &Tool) -> PathBuf {
+    get_tool_download_dir(base_path, tool).join(&tool.current_version)
+}
+
+fn get_tool_download_dir(base_path: &Path, tool: &Tool) -> PathBuf {
+    base_path
+        .join("..")
+        .join("..")
+        .canonicalize()
+        .unwrap()
+        .join("tools")
+        .join(&tool.name)
 }

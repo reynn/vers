@@ -1,9 +1,5 @@
 // Turn off common dev assertions only for debug builds, release builds will still work as normal
 #![warn(clippy::all)]
-// #![cfg_attr(
-//     debug_assertions,
-//     allow(dead_code, unused_macros, unused_imports, unused_variables)
-// )]
 
 mod archiver;
 mod cli;
@@ -17,7 +13,12 @@ mod tool;
 mod version;
 
 use {
-    crate::{cli::Actions, cli_actions::UpdateType, environment::Environment, system::System},
+    crate::{
+        cli::Actions,
+        cli_actions::{Patterns, UpdateType},
+        environment::Environment,
+        system::System,
+    },
     log::*,
 };
 
@@ -25,17 +26,17 @@ pub type Result<T> = eyre::Result<T>;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let opts = cli::opts().run();
+    let opts = cli::Opts::new();
+
     env_logger::builder()
-        .filter_level(match opts.verbose {
-            3 => LevelFilter::Trace,
-            2 => LevelFilter::Debug,
-            1 => LevelFilter::Info,
-            _ => LevelFilter::Warn,
-        })
+        .filter_level(opts.verbose.log_level_filter())
         .init();
 
-    let config_dir = dirs::get_default_config_path();
+    let config_dir: std::path::PathBuf = if let Some(dir) = opts.data_dir {
+        dir
+    } else {
+        dirs::get_default_config_path()
+    };
 
     if let Some(api_token) = opts.github_api_token {
         info!("Initializing the GitHub client with token from CLI args");
@@ -51,33 +52,39 @@ async fn main() -> Result<()> {
         Actions::Add {
             name,
             alias,
-            pattern,
-            filter,
+            asset_pattern,
+            file_filter,
             pre_release,
             show,
         } => {
-            debug!("CLI: Name `{name}`, alias `{:?}`, pattern `{:?}`, filter `{:?}`, pre_release `{pre_release}`, show `{show}`", alias, pattern, filter);
+            debug!("CLI: Name `{name}`, alias `{:?}`, pattern `{:?}`, filter `{:?}`, pre_release `{pre_release}`, show `{show}`", alias, asset_pattern, file_filter);
             let system = System::new();
             let mut env = Environment::load(&config_dir, &opts.env).await?;
             cli_actions::add_new_tool(
                 &mut env,
                 &name,
                 &system,
-                pattern,
-                filter,
+                Patterns {
+                    asset: asset_pattern,
+                    file: file_filter,
+                },
                 alias,
                 show,
                 pre_release,
             )
             .await?;
         }
-        Actions::Remove { name, all } => {
+        Actions::Remove {
+            name,
+            all,
+            link_only: _link_only,
+        } => {
             let mut env = Environment::load(&config_dir, &opts.env).await?;
             cli_actions::remove_tool(&mut env, &name, all).await?;
         }
-        Actions::List { installed } => {
+        Actions::List { installed, output } => {
             let env = Environment::load(&config_dir, &opts.env).await?;
-            cli_actions::list_tools(&env, installed).await?;
+            cli_actions::list_tools(&env, installed, output).await?;
         }
         Actions::Update { name } => {
             let system = System::new();
@@ -93,16 +100,27 @@ async fn main() -> Result<()> {
             )
             .await?;
         }
-        Actions::Env { name, shell } => {
+        Actions::Completions { shell } => {
+            cli_actions::generate_completions(shell);
+        }
+        Actions::Env {
+            name,
+            shell,
+            bare_path,
+        } => {
             let name = match name {
                 Some(name) => name,
                 None => opts.env,
             };
             let env = Environment::load(&config_dir, &name).await?;
-            match &shell[..] {
-                "fish" => println!("set -p PATH \"{}\"", env.base_dir),
-                "bash" | "sh" | "zsh" => println!("export PATH=\"{}:$PATH\"", env.base_dir),
-                _ => panic!("{} is not a known shell", shell),
+            if bare_path {
+                println!("{}", env.base_dir)
+            } else {
+                match &shell[..] {
+                    "fish" => println!("set -p PATH \"{}\"", env.base_dir),
+                    "bash" | "sh" | "zsh" => println!("export PATH=\"{}:$PATH\"", env.base_dir),
+                    _ => panic!("{} is not a known shell", shell),
+                }
             }
         }
         Actions::Sync => {
