@@ -1,32 +1,17 @@
-// Turn off common dev assertions only for debug builds, release builds will still work as normal
-#![warn(clippy::all)]
-
-mod archiver;
-mod cli;
-mod cli_actions;
-mod dirs;
-mod download;
-mod environment;
-mod github;
-mod system;
-mod tool;
-mod version;
-
 use {
-    crate::{
-        cli::Actions,
-        cli_actions::{Patterns, UpdateType},
+    log::*,
+    vers::{
+        cli::{self, Actions},
+        cli_actions::{self, Patterns, UpdateType},
+        dirs,
         environment::Environment,
         system::System,
     },
-    log::*,
 };
 
-pub type Result<T> = eyre::Result<T>;
-
 #[tokio::main]
-async fn main() -> Result<()> {
-    let opts = cli::Opts::new();
+async fn main() -> vers::Result<()> {
+    let opts = cli::Opts::default();
 
     env_logger::builder()
         .filter_level(opts.verbose.log_level_filter())
@@ -58,7 +43,7 @@ async fn main() -> Result<()> {
             show,
         } => {
             debug!("CLI: Name `{name}`, alias `{:?}`, pattern `{:?}`, filter `{:?}`, pre_release `{pre_release}`, show `{show}`", alias, asset_pattern, file_filter);
-            let system = System::new();
+            let system = System::default();
             let mut env = Environment::load(&config_dir, &opts.env).await?;
             cli_actions::add_new_tool(
                 &mut env,
@@ -87,7 +72,7 @@ async fn main() -> Result<()> {
             cli_actions::list_tools(&env, installed, output).await?;
         }
         Actions::Update { name } => {
-            let system = System::new();
+            let system = System::default();
             let mut env = Environment::load(&config_dir, &opts.env).await?;
             cli_actions::update_tools(
                 &mut env,
@@ -115,16 +100,17 @@ async fn main() -> Result<()> {
             let env = Environment::load(&config_dir, &name).await?;
             if bare_path {
                 println!("{}", env.base_dir)
-            } else {
-                match &shell[..] {
-                    "fish" => println!("set -p PATH \"{}\"", env.base_dir),
-                    "bash" | "sh" | "zsh" => println!("export PATH=\"{}:$PATH\"", env.base_dir),
-                    _ => panic!("{} is not a known shell", shell),
+            } else if let Some(shell) = shell {
+                match shell {
+                    cli::Shells::Fish => println!("set -p PATH \"{}\"", env.base_dir),
+                    cli::Shells::Bash | cli::Shells::Zsh => {
+                        println!("export PATH=\"{}:$PATH\"", env.base_dir)
+                    }
                 }
             }
         }
         Actions::Sync => {
-            let system = System::new();
+            let system = System::default();
             let mut env = Environment::load(&config_dir, &opts.env).await?;
             println!("Syncing versions with {} configuration.", env.name);
             cli_actions::sync_tools(&mut env, &system).await?;

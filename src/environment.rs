@@ -1,5 +1,5 @@
 use {
-    crate::{archiver, download, tool::Tool, version::Version},
+    crate::{archiver, dirs, download, tool::Tool, version::Version},
     log::*,
     octocrab::models::repos::Asset,
     serde::{Deserialize, Serialize},
@@ -25,8 +25,14 @@ impl Drop for Environment {
         let out_file = Path::new(&self.base_dir).parent().unwrap();
         let out_file = out_file.join(format!("{}.json", &self.name));
         info!("Writing {} environment file to {:?}", &self.name, out_file);
-        let contents = to_string_pretty(&self).unwrap();
-        std::fs::write(out_file, contents).unwrap();
+
+        match to_string_pretty(&self) {
+            Ok(contents) => match std::fs::write(&out_file, contents) {
+                Ok(_) => debug!("Wrote Environment to file {:?}", out_file),
+                Err(e) => error!("Failed to write Environment file; {}", e),
+            },
+            Err(e) => error!("Failed to marshal Environment to JSON. {}", e),
+        }
     }
 }
 
@@ -64,7 +70,7 @@ impl Environment {
                     debug!("Environment file does not exist");
                     Ok(Environment {
                         name: name.to_string(),
-                        base_dir: env_dir.join(name).to_str().unwrap_or_default().to_string(),
+                        base_dir: env_dir.join(name).to_str().unwrap_or_default().into(),
                         tools: Vec::new(),
                     })
                 }
@@ -86,20 +92,18 @@ impl Environment {
         asset_pattern: &'_ str,
         file_pattern: &'_ str,
     ) -> crate::Result<()> {
-        let tool_dir = Path::new(&self.base_dir)
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap()
-            .join("tools")
-            .join(name);
+        let env_base_path = Path::new(&self.base_dir);
+        let tool_dir = dirs::get_tool_download_dir(env_base_path, name);
+        info!("Actual tools dir: {:?}", tool_dir);
+
         let version_tag = version.as_tag();
-        let tool_version_dir = tool_dir.clone().join(&version_tag);
+        let tool_version_dir =
+            dirs::get_tool_version_download_dir(env_base_path, name, &version_tag);
 
         match download::download_asset(&asset, &tool_version_dir).await {
             Ok(asset_path) => {
                 info!("Completed download: {}", asset.browser_download_url);
-                let symlink_dest = Path::new(&self.base_dir).join(alias);
+                let symlink_dest = dirs::get_tool_link_path(env_base_path, &self.name, name);
                 let extractor = archiver::determine_extractor(&asset_path);
 
                 match extractor {

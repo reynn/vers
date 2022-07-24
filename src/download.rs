@@ -20,8 +20,8 @@ pub async fn download_asset<P: Into<PathBuf>>(
         };
     };
     match reqwest::get(asset.browser_download_url.as_str()).await {
-        Ok(cd) => match cd.bytes().await {
-            Ok(bytes) => match write(&out_file_name, bytes).await {
+        Ok(download_result) => match download_result.bytes().await {
+            Ok(download_bytes) => match write(&out_file_name, download_bytes).await {
                 Ok(_) => Ok(out_file_name),
                 Err(write_err) => eyre::bail!(write_err),
             },

@@ -1,7 +1,9 @@
+use indicatif::{ProgressBar, ProgressStyle};
+
 use {
     crate::{
-        cli, environment::Environment, github, system::System, tool::Tool, version::parse_version,
-        version::Version,
+        cli, dirs, environment::Environment, github, system::System, tool::Tool,
+        version::parse_version, version::Version,
     },
     clap::CommandFactory,
     log::*,
@@ -9,10 +11,11 @@ use {
     skim::prelude::*,
     std::{
         io::{self, Cursor},
-        path::{Path, PathBuf},
+        path::Path,
     },
     tabled::{object::Segment, Alignment, Footer, Header, Modify, Style, Table, Tabled},
 };
+
 pub struct Patterns {
     pub asset: Option<String>,
     pub file: Option<String>,
@@ -104,17 +107,21 @@ pub async fn remove_tool(
         info!("Removing {name} from environment. {}", &env.name);
         let env_path = Path::new(&env.base_dir);
 
-        let link_path = get_tool_link_path(env_path, &env.name, env_tool);
+        let link_path = dirs::get_tool_link_path(env_path, &env.name, &env_tool.name);
         if link_path.exists() {
             debug!("Removing symlink {:?}", &link_path);
             std::fs::remove_file(link_path)?;
         }
 
         if remove_all_versions {
-            let tool_path = get_tool_download_dir(env_path, env_tool);
+            let tool_path = dirs::get_tool_download_dir(env_path, &env_tool.name);
             std::fs::remove_dir_all(tool_path)?;
         } else {
-            let tool_path = get_tool_version_download_dir(env_path, env_tool);
+            let tool_path = dirs::get_tool_version_download_dir(
+                env_path,
+                &env_tool.name,
+                &env_tool.current_version,
+            );
             debug!("Removing tool directory {:?}", &tool_path);
             std::fs::remove_dir_all(&tool_path)?;
         }
@@ -215,13 +222,22 @@ pub async fn update_tools(
     match update_type {
         UpdateType::All => {
             let tools: Vec<Tool> = env.tools.to_vec();
-            println!("-> Updating all tools...");
+            let progress_bar = ProgressBar::new(tools.len() as u64);
+            progress_bar.set_style(
+                ProgressStyle::default_bar().template("{bar:75.cyan/blue} {pos:>7}/{len:7} {msg}"),
+            );
+
+            let mut failed_tools = Vec::new();
             for tool in tools {
+                progress_bar.set_message(tool.name.clone());
                 match handle_tool_install(env, &tool, system, None).await {
                     Ok(_) => info!("Tool {} complete.", &tool.name),
-                    Err(install_err) => error!("{:?}", install_err),
+                    Err(install_err) => failed_tools.push(install_err.to_string()),
                 }
+                progress_bar.inc(1);
             }
+            error!("{}", failed_tools.join("\n"));
+
             Ok(())
         }
         UpdateType::Specific(tool_name) => {
@@ -250,6 +266,7 @@ pub async fn update_tools(
 
 pub async fn sync_tools(env: &mut Environment, system: &'_ System) -> crate::Result<()> {
     let tools: Vec<Tool> = env.tools.to_vec();
+    let progress_bar = ProgressBar::new(tools.len() as u64);
 
     for tool in tools.iter() {
         let parsed_version = parse_version(&tool.current_version);
@@ -258,8 +275,9 @@ pub async fn sync_tools(env: &mut Environment, system: &'_ System) -> crate::Res
                 "Tool {} has been installed at version {}",
                 &tool.name, tool.current_version
             ),
-            Err(install_err) => error!("{:?}", install_err),
+            Err(install_err) => eyre::bail!("{:?}", install_err),
         }
+        progress_bar.inc(1);
     }
     Ok(())
 }
@@ -281,20 +299,15 @@ async fn handle_tool_install(
     let repo = split_org_repo[1];
 
     let version = if let Some(version) = version {
-        info!("Using provided version {}", version.as_tag());
         version
     } else {
-        info!("Getting version from release tags");
-        github::get_latest_release_tag(owner, repo).await.unwrap()
+        match github::get_latest_release_tag(owner, repo).await {
+            Some(latest_release) => latest_release,
+            None => eyre::bail!("Failed to find latest release for {owner}/{repo}"),
+        }
     };
 
-    info!(
-        "Comparing `{}` to `{}`",
-        tool.current_version,
-        version.as_tag()
-    );
     if tool.current_version != version.as_tag() {
-        println!("--> Installing tool {owner}/{repo}@{}", version.as_tag());
         let release = match github::get_specific_release_for_repo(owner, repo, &version).await {
             Ok(release) => release,
             Err(release_err) => {
@@ -319,35 +332,19 @@ async fn handle_tool_install(
                 .await
             {
                 Ok(_) => (),
-                Err(add_tool_err) => error!(
+                Err(add_tool_err) => eyre::bail!(
                     "Error installing latest version of {}. {:?}",
-                    &tool.name, add_tool_err
+                    &tool.name,
+                    add_tool_err
                 ),
             },
-            None => error!(
+            None => eyre::bail!(
                 "Unable to find an asset that matches '{}' for tool {}",
-                &tool.asset_pattern, &tool.name
+                &tool.asset_pattern,
+                &tool.name
             ),
         }
     }
 
     Ok(())
-}
-
-fn get_tool_link_path(base_path: &Path, env_name: &str, tool: &Tool) -> PathBuf {
-    base_path.join("envs").join(env_name).join(&tool.alias)
-}
-
-fn get_tool_version_download_dir(base_path: &Path, tool: &Tool) -> PathBuf {
-    get_tool_download_dir(base_path, tool).join(&tool.current_version)
-}
-
-fn get_tool_download_dir(base_path: &Path, tool: &Tool) -> PathBuf {
-    base_path
-        .join("..")
-        .join("..")
-        .canonicalize()
-        .unwrap()
-        .join("tools")
-        .join(&tool.name)
 }

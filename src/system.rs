@@ -10,8 +10,8 @@ pub struct System {
     pub os: OperatingSystem,
 }
 
-impl System {
-    pub fn new() -> Self {
+impl Default for System {
+    fn default() -> Self {
         Self {
             architecture: match ARCH {
                 "x86" => PlatformArchitecture::I686,
@@ -28,7 +28,9 @@ impl System {
             },
         }
     }
+}
 
+impl System {
     pub fn is_match(&self, s: &'_ str) -> bool {
         let os_regex = self.os.get_match_regex();
         let arch_regex = self.architecture.get_match_regex();

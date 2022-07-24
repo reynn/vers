@@ -1,6 +1,6 @@
 use {
     directories_next::{BaseDirs, ProjectDirs, UserDirs},
-    std::path::PathBuf,
+    std::path::{Path, PathBuf},
 };
 
 pub fn get_default_config_path() -> PathBuf {
@@ -13,4 +13,26 @@ pub fn get_default_config_path() -> PathBuf {
     } else {
         panic!("Unable to determine a base directory for user configs")
     }
+}
+
+pub fn get_tool_link_path(base_path: &'_ Path, env_name: &'_ str, name: &'_ str) -> PathBuf {
+    base_path.join("envs").join(env_name).join(name)
+}
+
+pub fn get_tool_version_download_dir(
+    base_path: &'_ Path,
+    name: &'_ str,
+    version: &'_ str,
+) -> PathBuf {
+    get_tool_download_dir(base_path, name).join(version)
+}
+
+pub fn get_tool_download_dir(base_path: &'_ Path, name: &'_ str) -> PathBuf {
+    base_path
+        .join("..")
+        .join("..")
+        .canonicalize()
+        .unwrap()
+        .join("tools")
+        .join(name)
 }

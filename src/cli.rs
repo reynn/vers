@@ -1,5 +1,5 @@
 use {
-    clap::{Parser, Subcommand, ValueEnum},
+    clap::{ArgGroup, Parser, Subcommand, ValueEnum},
     clap_verbosity_flag::Verbosity,
     std::{fmt::Display, path::PathBuf},
 };
@@ -27,8 +27,8 @@ pub struct Opts {
     pub action: Actions,
 }
 
-impl Opts {
-    pub fn new() -> Opts {
+impl Default for Opts {
+    fn default() -> Self {
         Opts::parse()
     }
 }
@@ -109,17 +109,25 @@ pub enum Actions {
         shell: clap_complete::Shell,
     },
     /// show the exports required for setup.
+    #[clap(group(ArgGroup::new("output").required(true).args(&["shell", "bare-path"])))]
     Env {
         /// Name of the environment.
         #[clap(short, long, value_parser)]
         name: Option<String>,
         /// Prints out a command to set the environment path in the shells environment.
         #[clap(short, long, value_parser)]
-        shell: String,
+        shell: Option<Shells>,
         /// Output just the bath to the environment rather than a setup string.
         #[clap(short, long, value_parser)]
         bare_path: bool,
     },
+}
+
+#[derive(Debug, Clone, ValueEnum)]
+pub enum Shells {
+    Fish,
+    Zsh,
+    Bash,
 }
 
 #[derive(Debug, Clone, ValueEnum)]
