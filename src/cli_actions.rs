@@ -1,11 +1,10 @@
-use indicatif::{ProgressBar, ProgressStyle};
-
 use {
     crate::{
         cli, dirs, environment::Environment, github, system::System, tool::Tool,
         version::parse_version, version::Version,
     },
     clap::CommandFactory,
+    indicatif::{ProgressBar, ProgressStyle},
     log::*,
     serde::Serialize,
     skim::prelude::*,
@@ -224,7 +223,8 @@ pub async fn update_tools(
             let tools: Vec<Tool> = env.tools.to_vec();
             let progress_bar = ProgressBar::new(tools.len() as u64);
             progress_bar.set_style(
-                ProgressStyle::default_bar().template("{bar:75.cyan/blue} {pos:>7}/{len:7} {msg}"),
+                ProgressStyle::default_bar()
+                    .template("{bar:75.cyan/blue} {pos:>7}/{len:7} {msg}")?,
             );
 
             let mut failed_tools = Vec::new();
