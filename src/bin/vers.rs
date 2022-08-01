@@ -22,6 +22,7 @@ async fn main() -> vers::Result<()> {
     } else {
         dirs::get_default_config_path()
     };
+    debug!("Config dir: {:?}", &config_dir);
 
     if let Some(api_token) = opts.github_api_token {
         info!("Initializing the GitHub client with token from CLI args");

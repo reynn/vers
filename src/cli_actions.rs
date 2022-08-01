@@ -106,7 +106,7 @@ pub async fn remove_tool(
         info!("Removing {name} from environment. {}", &env.name);
         let env_path = Path::new(&env.base_dir);
 
-        let link_path = dirs::get_tool_link_path(env_path, &env.name, &env_tool.name);
+        let link_path = dirs::get_tool_link_path(env_path, &env_tool.name);
         if link_path.exists() {
             debug!("Removing symlink {:?}", &link_path);
             std::fs::remove_file(link_path)?;

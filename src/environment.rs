@@ -15,7 +15,6 @@ use {
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Environment {
     pub name: String,
-    #[serde(skip)]
     pub base_dir: String,
     pub tools: Vec<Tool>,
 }
@@ -103,7 +102,7 @@ impl Environment {
         match download::download_asset(&asset, &tool_version_dir).await {
             Ok(asset_path) => {
                 info!("Completed download: {}", asset.browser_download_url);
-                let symlink_dest = dirs::get_tool_link_path(env_base_path, &self.name, name);
+                let symlink_dest = dirs::get_tool_link_path(env_base_path, name);
                 let extractor = archiver::determine_extractor(&asset_path);
 
                 match extractor {
