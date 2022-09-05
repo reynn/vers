@@ -16,6 +16,8 @@ use {
 pub struct Environment {
     pub name: String,
     pub base_dir: String,
+    #[serde(skip)]
+    base_dir_path: PathBuf,
     pub tools: Vec<Tool>,
 }
 
@@ -267,6 +269,10 @@ impl Environment {
                 )
             }
         }
+    }
+
+    pub fn get_env_path(&self) -> PathBuf {
+        Path::new(&self.base_dir).to_path_buf()
     }
 }
 

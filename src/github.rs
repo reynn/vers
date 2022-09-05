@@ -24,11 +24,18 @@ pub async fn get_repo_releases(
         .await?
         .items
         .iter()
-        .filter(|release| match pre_release {
-            true => true,
-            false => !release.prerelease,
+        .filter_map(|release| match pre_release {
+            true => Some(release.tag_name.to_string()),
+            false => match release.prerelease {
+                true => None,
+                false => Some(release.tag_name.to_string()),
+            },
         })
-        .map(|release| release.tag_name.to_string())
+        // .filter(|release| match pre_release {
+        //     true => true, // if the user has requested pre-releases we want to return every discovered release
+        //     false => !release.prerelease, // filter out the discovered releases, so we ignore all pre-releases
+        // })
+        // .map(|release| release.tag_name.to_string())
         .collect())
 }
 
@@ -113,6 +120,7 @@ pub fn get_platform_specific_asset(
         .collect();
     match &platform_assets.len() {
         2.. => {
+            // if we get multiple results for the platform show the user a selector
             let item_reader = SkimItemReader::default().of_bufread(Cursor::new(
                 platform_assets
                     .iter()
@@ -143,6 +151,7 @@ pub fn get_platform_specific_asset(
             .unwrap();
             Some(selected_item.get(0).unwrap().to_owned())
         }
+        // if we only get one result we can just return that as is
         1 => Some(platform_assets.get(0).unwrap().clone()),
         _ => None,
     }

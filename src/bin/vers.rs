@@ -13,9 +13,7 @@ use {
 async fn main() -> vers::Result<()> {
     let opts = cli::Opts::default();
 
-    env_logger::builder()
-        .filter_level(opts.verbose.log_level_filter())
-        .init();
+    env_logger::builder().filter_level(opts.verbose.log_level_filter()).try_init()?;
 
     let config_dir: std::path::PathBuf = if let Some(dir) = opts.data_dir {
         dir
