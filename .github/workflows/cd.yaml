@@ -79,7 +79,7 @@ jobs:
           override: true
           profile: minimal
           target: ${{ matrix.target }}
-      
+
       - name: Setup | OpenSSL package
         if: matrix.os == 'ubuntu-22.04'
         run: |

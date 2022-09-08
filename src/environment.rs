@@ -69,9 +69,11 @@ impl Environment {
             Err(read_err) => match read_err.kind() {
                 std::io::ErrorKind::NotFound => {
                     debug!("Environment file does not exist");
+                    let base_dir: String = env_dir.join(name).to_str().unwrap_or_default().into();
                     Ok(Environment {
                         name: name.to_string(),
-                        base_dir: env_dir.join(name).to_str().unwrap_or_default().into(),
+                        base_dir: base_dir.clone(),
+                        base_dir_path: Path::new(&base_dir).to_path_buf(),
                         tools: Vec::new(),
                     })
                 }
@@ -104,7 +106,7 @@ impl Environment {
         match download::download_asset(&asset, &tool_version_dir).await {
             Ok(asset_path) => {
                 info!("Completed download: {}", asset.browser_download_url);
-                let symlink_dest = dirs::get_tool_link_path(env_base_path, name);
+                let symlink_dest = dirs::get_tool_link_path(env_base_path, alias);
                 let extractor = archiver::determine_extractor(&asset_path);
 
                 match extractor {
@@ -272,7 +274,7 @@ impl Environment {
     }
 
     pub fn get_env_path(&self) -> PathBuf {
-        Path::new(&self.base_dir).to_path_buf()
+        self.base_dir_path.clone()
     }
 }
 
