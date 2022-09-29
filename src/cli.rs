@@ -7,23 +7,23 @@ use {
 #[derive(Debug, Clone, Parser)]
 #[clap(author, version, about)]
 pub struct Opts {
-    #[clap(flatten)]
+    #[command(flatten)]
     pub verbose: Verbosity,
     /// Where to store the data application data
-    #[clap(short,long, value_parser, value_hint = clap::ValueHint::DirPath)]
+    #[arg(short,long, value_hint = clap::ValueHint::DirPath)]
     pub data_dir: Option<PathBuf>,
     /// Environment where the tool will be installed to
-    #[clap(short, long, value_parser, default_value = "global")]
+    #[arg(short, long, default_value = "global")]
     pub env: String,
     /// A GitHub API token to use authenticated requests to the API
-    #[clap(long, value_parser)]
+    #[arg(long)]
     pub github_api_token: Option<String>,
     /// Use a local environment
     ///
     /// Files will be stored in the current directory under a "hidden" folder
-    #[clap(short, long, value_parser)]
+    #[arg(short, long)]
     pub local: bool,
-    #[clap(subcommand)]
+    #[command(subcommand)]
     pub action: Actions,
 }
 
