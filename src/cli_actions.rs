@@ -12,7 +12,7 @@ use {
         io::{self, Cursor},
         path::Path,
     },
-    tabled::{object::Segment, Alignment, Footer, Header, Modify, Style, Table, Tabled},
+    tabled::{object::Segment, Alignment, Modify, Panel, Style, Table, Tabled},
 };
 
 pub struct Patterns {
@@ -189,12 +189,12 @@ pub async fn list_tools(
             println!(
                 "{}",
                 Table::new(&l)
-                    .with(Header(if installed {
+                    .with(Panel::header(if installed {
                         "All Installed Versions"
                     } else {
                         "Current Versions Only"
                     }))
-                    .with(Footer(format!("{} tools installed", l.len())))
+                    .with(Panel::footer(format!("{} tools installed", l.len())))
                     .with(Modify::new(Segment::all()).with(Alignment::center()))
                     .with(Style::rounded())
             );
