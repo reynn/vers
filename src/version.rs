@@ -1,4 +1,4 @@
-use {log::info, std::fmt::Display};
+use {std::fmt::Display, tracing::info};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Version {

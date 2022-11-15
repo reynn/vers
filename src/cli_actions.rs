@@ -5,7 +5,6 @@ use {
     },
     clap::CommandFactory,
     indicatif::{ProgressBar, ProgressStyle},
-    log::*,
     serde::Serialize,
     skim::prelude::*,
     std::{
@@ -13,6 +12,7 @@ use {
         path::Path,
     },
     tabled::{object::Segment, Alignment, Modify, Panel, Style, Table, Tabled},
+    tracing::{debug, error, info},
 };
 
 pub struct Patterns {
@@ -40,7 +40,7 @@ pub async fn add_new_tool(
     let repo = split_org_repo[1];
     let alias = alias.unwrap_or_else(|| repo.to_string());
 
-    let asset_pattern = &patterns.asset.unwrap_or_else(|| "".to_string());
+    let asset_pattern = &patterns.asset.unwrap_or_default();
     let file_pattern = &patterns.file.unwrap_or_else(|| alias.clone());
 
     info!("Owner `{owner}`, Repo `{repo}`, Alias `{alias}`, Pattern `{asset_pattern}`, Filter `{file_pattern}`");
@@ -130,7 +130,7 @@ pub async fn remove_tool(
         env.tools.swap_remove(tool_idx);
         Ok(())
     } else {
-        eyre::bail!("{} is not found in the {} environment.", name, env.name)
+        anyhow::bail!("{} is not found in the {} environment.", name, env.name)
     }
 }
 
@@ -139,11 +139,11 @@ pub async fn list_tools(
     installed: bool,
     output_type: cli::ListOutputType,
 ) -> crate::Result<()> {
-    info!("Listing all tools available. {:?}", env);
+    info!("Listing all tools available in {}", env.name);
     let tools = &env.tools;
 
     if tools.is_empty() {
-        eyre::bail!("no tools installed for environment ({})", env.name);
+        anyhow::bail!("no tools installed for environment ({})", env.name);
     }
 
     #[derive(Tabled, Serialize, PartialEq, PartialOrd, Eq, Ord)]
@@ -275,7 +275,7 @@ pub async fn sync_tools(env: &mut Environment, system: &'_ System) -> crate::Res
                 "Tool {} has been installed at version {}",
                 &tool.name, tool.current_version
             ),
-            Err(install_err) => eyre::bail!("{:?}", install_err),
+            Err(install_err) => anyhow::bail!("{:?}", install_err),
         }
         progress_bar.inc(1);
     }
@@ -303,7 +303,7 @@ async fn handle_tool_install(
     } else {
         match github::get_latest_release_tag(owner, repo).await {
             Some(latest_release) => latest_release,
-            None => eyre::bail!("Failed to find latest release for {owner}/{repo}"),
+            None => anyhow::bail!("Failed to find latest release for {owner}/{repo}"),
         }
     };
 
@@ -311,7 +311,7 @@ async fn handle_tool_install(
         let release = match github::get_specific_release_for_repo(owner, repo, &version).await {
             Ok(release) => release,
             Err(release_err) => {
-                eyre::bail!(
+                anyhow::bail!(
                     "Unable to get release {} for {owner}/{repo}. {:?}",
                     version.as_tag(),
                     release_err
@@ -332,13 +332,13 @@ async fn handle_tool_install(
                 .await
             {
                 Ok(_) => (),
-                Err(add_tool_err) => eyre::bail!(
+                Err(add_tool_err) => anyhow::bail!(
                     "Error installing latest version of {}. {:?}",
                     &tool.name,
                     add_tool_err
                 ),
             },
-            None => eyre::bail!(
+            None => anyhow::bail!(
                 "Unable to find an asset that matches '{}' for tool {}",
                 &tool.asset_pattern,
                 &tool.name

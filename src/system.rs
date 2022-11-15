@@ -1,7 +1,7 @@
 use {
-    log::*,
     regex::Regex,
     std::env::consts::{ARCH, OS},
+    tracing::debug,
 };
 
 #[derive(Debug)]

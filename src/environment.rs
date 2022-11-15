@@ -1,14 +1,11 @@
 use {
     crate::{archiver, dirs, download, tool::Tool, version::Version},
-    log::*,
+    async_std::fs::read_to_string,
     octocrab::models::repos::Asset,
     serde::{Deserialize, Serialize},
     serde_json::{from_str, to_string_pretty},
-    std::{
-        os::unix::prelude::PermissionsExt,
-        path::{Path, PathBuf},
-    },
-    tokio::{fs::read_to_string, process::Command},
+    std::path::{Path, PathBuf},
+    tracing::{debug, error, info},
     walkdir::{DirEntry, WalkDir},
 };
 
@@ -25,7 +22,7 @@ impl Drop for Environment {
     fn drop(&mut self) {
         let out_file = Path::new(&self.base_dir).parent().unwrap();
         let out_file = out_file.join(format!("{}.json", &self.name));
-        info!("Writing {} environment file to {:?}", &self.name, out_file);
+        debug!("Writing {} environment file to {:?}", &self.name, out_file);
 
         match to_string_pretty(&self) {
             Ok(contents) => match std::fs::write(&out_file, contents) {
@@ -45,7 +42,7 @@ impl Environment {
             match std::fs::create_dir_all(&env_dir) {
                 Ok(_) => {}
                 Err(create_dir_err) => {
-                    eyre::bail!("Unable to create the envs directory: {}", create_dir_err)
+                    anyhow::bail!("Unable to create the envs directory: {}", create_dir_err)
                 }
             }
         }
@@ -60,7 +57,7 @@ impl Environment {
                         .to_string();
                     Ok(res)
                 }
-                Err(serde_err) => eyre::bail!(
+                Err(serde_err) => anyhow::bail!(
                     "Failed to deserialize {:?} as an environment. {:?}",
                     env_path,
                     serde_err
@@ -77,7 +74,7 @@ impl Environment {
                         tools: Vec::new(),
                     })
                 }
-                _ => eyre::bail!(
+                _ => anyhow::bail!(
                     "Failed to read contents from file {:?}. {}",
                     env_path,
                     read_err
@@ -105,165 +102,89 @@ impl Environment {
 
         match download::download_asset(&asset, &tool_version_dir).await {
             Ok(asset_path) => {
-                info!("Completed download: {}", asset.browser_download_url);
+                info!("Completed downloading {}", asset.browser_download_url);
                 let symlink_dest = dirs::get_tool_link_path(env_base_path, alias);
-                let extractor = archiver::determine_extractor(&asset_path);
+                let possible_extractors = archiver::determine_possible_extractors(&asset_path);
 
-                match extractor {
-                    Some(extractor) => {
-                        match archiver::handle_file_extraction(
-                            extractor,
-                            &asset_path,
-                            Some(tool_version_dir.clone()),
-                        )
-                        .await
-                        {
-                            Ok(_) => {
-                                info!(
-                                    "Extracted file {}",
-                                    &asset_path.to_str().unwrap_or_default()
-                                );
-
-                                if let Some(bin_file) = find_binary(
-                                    &tool_version_dir,
-                                    if !file_pattern.is_empty() {
-                                        file_pattern
-                                    } else {
-                                        alias
-                                    },
-                                ) {
-                                    create_symlink(&bin_file.into_path(), &symlink_dest);
-                                    match self.tools.iter_mut().find(|t| t.name == name) {
-                                        // add to the tools list
-                                        Some(installed_tool) => {
-                                            installed_tool.set_current_version(&version);
-                                            let version_tag = &version.as_tag();
-                                            if !installed_tool
-                                                .installed_versions
-                                                .iter()
-                                                .any(|v| v[..] == version_tag[..])
-                                            {
-                                                installed_tool
-                                                    .installed_versions
-                                                    .push(version.as_tag());
-                                                info!(
-                                                    "Added new version {} of {} in environment {}",
-                                                    version.as_tag(),
-                                                    name,
-                                                    self.name
-                                                );
-                                            }
-                                            Ok(())
-                                        }
-                                        // create a new tool, and add to our list
-                                        None => {
-                                            self.tools.push(Tool::new(
-                                                name,
-                                                alias,
-                                                &version,
-                                                asset_pattern,
-                                                file_pattern,
-                                            ));
-                                            info!(
-                                                "Added new tool {} in environment {}",
-                                                name, self.name
-                                            );
-                                            Ok(())
-                                        }
-                                    }
+                for extractor in possible_extractors {
+                    let extractor_name = &extractor.name();
+                    match archiver::handle_file_extraction(
+                        extractor,
+                        &asset_path,
+                        Some(tool_version_dir.clone()),
+                    )
+                    .await
+                    {
+                        Ok(_) => {
+                            info!(
+                                "Successfully extracted '{}' using the '{}' extractor",
+                                &asset_path.display(),
+                                extractor_name
+                            );
+                            if let Some(bin_file) = find_binary(
+                                &tool_version_dir,
+                                if !file_pattern.is_empty() {
+                                    file_pattern
                                 } else {
-                                    eyre::bail!(
-                                        "Could not find a binary named '{}' in {:?}",
-                                        alias,
-                                        tool_version_dir
-                                    )
-                                }
-                            }
-                            Err(extractor_err) => eyre::bail!(
-                                "Failed to extract the file {:?}. {:?}",
-                                asset_path,
-                                extractor_err
-                            ),
-                        }
-                    }
-                    None => {
-                        let cmd = Command::new("file")
-                            .arg(&asset_path.to_str().unwrap_or_default())
-                            .output();
-                        let executable_file: bool = match cmd.await {
-                            Ok(output) => {
-                                let is_exec =
-                                    String::from_utf8(output.stdout)?.contains("executable");
-
-                                info!("Setting {:?} as executable", &asset_path);
-                                match std::fs::set_permissions(
-                                    &asset_path,
-                                    std::fs::Permissions::from_mode(0o0755),
-                                ) {
-                                    Ok(_) => {
-                                        debug!("Successfully set permissions for {:?}", asset_path)
+                                    alias
+                                },
+                            ) {
+                                create_symlink(&bin_file.into_path(), &symlink_dest);
+                                match self.tools.iter_mut().find(|t| t.name == name) {
+                                    // add to the tools list
+                                    Some(installed_tool) => {
+                                        installed_tool.set_current_version(&version);
+                                        let version_tag = &version.as_tag();
+                                        if !installed_tool
+                                            .installed_versions
+                                            .iter()
+                                            .any(|v| v[..] == version_tag[..])
+                                        {
+                                            installed_tool
+                                                .installed_versions
+                                                .push(version.as_tag());
+                                            info!(
+                                                "Added new version {} of {} in environment {}",
+                                                version.as_tag(),
+                                                name,
+                                                self.name
+                                            );
+                                        }
+                                        return Ok(());
                                     }
-                                    Err(perm_err) => {
-                                        error!(
-                                            "Unable to set permissions on {:?}. {:?}",
-                                            asset_path, perm_err
-                                        )
-                                    }
-                                }
-
-                                is_exec
-                            }
-                            Err(cmd_err) => {
-                                eyre::bail!(
-                                    "Unable to run `file` on {:?}. {:?}",
-                                    &asset_path,
-                                    cmd_err
-                                )
-                            }
-                        };
-
-                        if executable_file {
-                            create_symlink(&asset_path, &symlink_dest);
-                            match self.tools.iter_mut().find(|t| t.name == name) {
-                                // add to the tools list
-                                Some(installed_tool) => {
-                                    installed_tool.set_current_version(&version);
-                                    let version_tag = &version.as_tag();
-                                    if !installed_tool
-                                        .installed_versions
-                                        .iter()
-                                        .any(|v| v[..] == version_tag[..])
-                                    {
-                                        installed_tool.installed_versions.push(version.as_tag());
-                                        info!(
-                                            "Added new version {} of {} to environment {}",
-                                            version.as_tag(),
+                                    // create a new tool, and add to our list
+                                    None => {
+                                        self.tools.push(Tool::new(
                                             name,
-                                            self.name
+                                            alias,
+                                            &version,
+                                            asset_pattern,
+                                            file_pattern,
+                                        ));
+                                        info!(
+                                            "Added new tool {} in environment {}",
+                                            name, self.name
                                         );
+                                        return Ok(());
                                     }
-                                }
-                                // create a new tool, and add to our list
-                                None => {
-                                    info!("Added new tool {} to environment {}", name, self.name);
-                                    self.tools.push(Tool::new(
-                                        name,
-                                        alias,
-                                        &version,
-                                        asset_pattern,
-                                        file_pattern,
-                                    ));
-                                }
-                            };
-                            Ok(())
-                        } else {
-                            eyre::bail!("Failed to determine the file type for {:?}", asset_path)
+                                };
+                            } else {
+                                anyhow::bail!("Able to extract the file but not discover the required binary file")
+                            }
+                        }
+                        Err(e) => {
+                            error!(
+                                "Failed to extract using '{}' Error: {:?}",
+                                extractor_name, e
+                            )
                         }
                     }
                 }
+
+                Ok(())
             }
             Err(download_err) => {
-                eyre::bail!(
+                anyhow::bail!(
                     "Failed to download file {} from {}. {:?}",
                     asset.name,
                     asset.browser_download_url,

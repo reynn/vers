@@ -3,11 +3,11 @@ use {
         system::System,
         version::{parse_version, Version},
     },
-    log::*,
     octocrab::models::repos::{Asset, Release},
     regex::Regex,
     skim::prelude::*,
     std::io::Cursor,
+    tracing::{debug, info},
 };
 
 pub async fn get_repo_releases(
@@ -54,7 +54,7 @@ pub async fn get_specific_release_for_repo(
     if version == &Version::Latest {
         match octo.repos(owner, repo).releases().get_latest().await {
             Ok(latest_release) => Ok(latest_release),
-            Err(e) => eyre::bail!(e),
+            Err(e) => anyhow::bail!(e),
         }
     } else {
         match octo
@@ -72,7 +72,7 @@ pub async fn get_specific_release_for_repo(
                     .await
                 {
                     Ok(tagged_release) => Ok(tagged_release),
-                    Err(e) => eyre::bail!(e),
+                    Err(e) => anyhow::bail!(e),
                 }
             }
         }
