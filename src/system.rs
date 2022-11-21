@@ -1,10 +1,8 @@
-use {
-    regex::Regex,
-    std::env::consts::{ARCH, OS},
-    tracing::debug,
-};
+use regex::Regex;
+use std::{env::consts::{ARCH, OS}, fmt::Display};
+use tracing::debug;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct System {
     pub architecture: PlatformArchitecture,
     pub os: OperatingSystem,
@@ -45,11 +43,21 @@ impl System {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum OperatingSystem {
     Linux,
     Mac,
     Windows,
+}
+
+impl Display for OperatingSystem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            OperatingSystem::Linux => write!(f, "linux"),
+            OperatingSystem::Mac => write!(f, "Mac OS"),
+            OperatingSystem::Windows => write!(f, "Windows"),
+        }
+    }
 }
 
 impl OperatingSystem {
@@ -68,12 +76,23 @@ impl OperatingSystem {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum PlatformArchitecture {
     I686,
     Amd64,
     Arm32,
     Arm64,
+}
+
+impl Display for PlatformArchitecture {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            PlatformArchitecture::I686 => write!(f, "i686"),
+            PlatformArchitecture::Amd64 => write!(f, "x86_64"),
+            PlatformArchitecture::Arm32 => write!(f, "armv7"),
+            PlatformArchitecture::Arm64 => write!(f, "arm64"),
+        }
+    }
 }
 
 impl PlatformArchitecture {

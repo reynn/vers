@@ -11,5 +11,3 @@ pub mod github;
 pub mod system;
 pub mod tool;
 pub mod version;
-
-pub type Result<T> = anyhow::Result<T>;

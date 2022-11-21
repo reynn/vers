@@ -1,7 +1,5 @@
-use {
-    crate::version::Version,
-    serde::{Deserialize, Serialize},
-};
+use crate::version::Version;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
 #[serde(rename_all = "snake_case", default)]

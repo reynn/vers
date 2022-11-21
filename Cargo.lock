@@ -2580,6 +2580,7 @@ dependencies = [
  "tabled",
  "tar",
  "test-case",
+ "thiserror",
  "toml",
  "tracing",
  "tracing-subscriber",

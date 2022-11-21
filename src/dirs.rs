@@ -1,7 +1,5 @@
-use {
-    directories_next::{BaseDirs, ProjectDirs, UserDirs},
-    std::path::{Path, PathBuf},
-};
+use directories_next::{BaseDirs, ProjectDirs, UserDirs};
+use std::path::{Path, PathBuf};
 
 pub fn get_default_config_path() -> PathBuf {
     if let Some(project_dirs) = ProjectDirs::from("dev", "reynn", "vers") {

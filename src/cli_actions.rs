@@ -1,19 +1,57 @@
-use {
-    crate::{
-        cli, dirs, environment::Environment, github, system::System, tool::Tool,
-        version::parse_version, version::Version,
-    },
-    clap::CommandFactory,
-    indicatif::{ProgressBar, ProgressStyle},
-    serde::Serialize,
-    skim::prelude::*,
-    std::{
-        io::{self, Cursor},
-        path::Path,
-    },
-    tabled::{object::Segment, Alignment, Modify, Panel, Style, Table, Tabled},
-    tracing::{debug, error, info},
+use crate::{
+    cli, dirs,
+    environment::{Environment, EnvironmentError},
+    github,
+    system::{self, System},
+    tool::Tool,
+    version::parse_version,
+    version::Version,
 };
+use clap::CommandFactory;
+use indicatif::{ProgressBar, ProgressStyle};
+use serde::Serialize;
+use skim::prelude::*;
+use std::{
+    io::{self, Cursor},
+    path::Path,
+};
+use tabled::{object::Segment, Alignment, Modify, Panel, Style, Table, Tabled};
+use thiserror::Error;
+use tracing::{debug, error, info};
+
+#[derive(Debug, Error)]
+pub enum CliActionError {
+    #[error("Failed to delete file '{file_name}'(symlink? {symlink}). {source}")]
+    FileDeleteError {
+        file_name: std::path::PathBuf,
+        symlink: bool,
+        source: std::io::Error,
+    },
+    #[error("Failed to delete directory '{directory}. {source}")]
+    DirectoryDeleteError {
+        directory: std::path::PathBuf,
+        source: std::io::Error,
+    },
+    #[error("Tool '{tool_name}' not found in the '{env_name}' environment")]
+    ToolNotFound { tool_name: String, env_name: String },
+    #[error("The environment {0}, does not contain any tools")]
+    EmptyEnvironment(String),
+    #[error("Unable to find release for {0}")]
+    ReleaseNotFound(String),
+    #[error("Unable to find asset for {tool_name}@{version} for OS: {os}; Arch: {arch}")]
+    AssetNotFoundError {
+        tool_name: String,
+        version: Version,
+        arch: system::PlatformArchitecture,
+        os: system::OperatingSystem,
+    },
+    #[error("...")]
+    GitHubError(#[from] github::GitHubError),
+    #[error("...")]
+    EnvironmentError(#[from] EnvironmentError),
+}
+
+type Result<T, E = CliActionError> = std::result::Result<T, E>;
 
 pub struct Patterns {
     pub asset: Option<String>,
@@ -28,7 +66,7 @@ pub async fn add_new_tool(
     alias: Option<String>,
     show: bool,
     pre_release: bool,
-) -> super::Result<()> {
+) -> Result<()> {
     let split_name: Vec<&str> = name.split('@').collect();
     let org_repo = if split_name.len() > 1 {
         split_name[0]
@@ -74,7 +112,11 @@ pub async fn add_new_tool(
             })
             .unwrap_or_default()
         } else {
-            vec![versions.get(0).unwrap().to_string()]
+            match versions.get(0) {
+                Some(version) => vec![version.into()],
+                None => vec![],
+            }
+            // vec![versions.get(0).unwrap().to_string()]
         }
     };
 
@@ -101,7 +143,7 @@ pub async fn remove_tool(
     env: &mut Environment,
     name: &'_ str,
     remove_all_versions: bool,
-) -> crate::Result<()> {
+) -> Result<()> {
     if let Some(env_tool) = env.tools.iter().find(|t| t.name == name) {
         info!("Removing {name} from environment. {}", &env.name);
         let env_path = Path::new(&env.base_dir);
@@ -109,12 +151,23 @@ pub async fn remove_tool(
         let link_path = dirs::get_tool_link_path(env_path, &env_tool.name);
         if link_path.exists() {
             debug!("Removing symlink {:?}", &link_path);
-            std::fs::remove_file(link_path)?;
+            if let Err(remove_err) = std::fs::remove_file(&link_path) {
+                return Err(CliActionError::FileDeleteError {
+                    file_name: link_path,
+                    symlink: true,
+                    source: remove_err,
+                });
+            };
         }
 
         if remove_all_versions {
             let tool_path = dirs::get_tool_download_dir(env_path, &env_tool.name);
-            std::fs::remove_dir_all(tool_path)?;
+            std::fs::remove_dir_all(&tool_path).map_err(|remove_dir_err| {
+                CliActionError::DirectoryDeleteError {
+                    directory: tool_path,
+                    source: remove_dir_err,
+                }
+            })?;
         } else {
             let tool_path = dirs::get_tool_version_download_dir(
                 env_path,
@@ -122,7 +175,12 @@ pub async fn remove_tool(
                 &env_tool.current_version,
             );
             debug!("Removing tool directory {:?}", &tool_path);
-            std::fs::remove_dir_all(&tool_path)?;
+            std::fs::remove_dir_all(&tool_path).map_err(|remove_dir_err| {
+                CliActionError::DirectoryDeleteError {
+                    directory: tool_path,
+                    source: remove_dir_err,
+                }
+            })?;
         }
 
         let tool_idx = env.tools.iter().position(|t| t.name == name).unwrap();
@@ -130,7 +188,11 @@ pub async fn remove_tool(
         env.tools.swap_remove(tool_idx);
         Ok(())
     } else {
-        anyhow::bail!("{} is not found in the {} environment.", name, env.name)
+        // anyhow::bail!("{} is not found in the {} environment.", name, env.name)
+        Err(CliActionError::ToolNotFound {
+            tool_name: name.to_string(),
+            env_name: env.name.to_string(),
+        })
     }
 }
 
@@ -138,12 +200,12 @@ pub async fn list_tools(
     env: &'_ Environment,
     installed: bool,
     output_type: cli::ListOutputType,
-) -> crate::Result<()> {
+) -> Result<()> {
     info!("Listing all tools available in {}", env.name);
     let tools = &env.tools;
 
     if tools.is_empty() {
-        anyhow::bail!("no tools installed for environment ({})", env.name);
+        return Err(CliActionError::EmptyEnvironment(env.name.to_string()));
     }
 
     #[derive(Tabled, Serialize, PartialEq, PartialOrd, Eq, Ord)]
@@ -201,7 +263,7 @@ pub async fn list_tools(
         }
         cli::ListOutputType::Text => l.iter().for_each(|t| println!("{}", t)),
         cli::ListOutputType::Json => {
-            println!("{}", serde_json::to_string_pretty(&l)?)
+            println!("{}", serde_json::to_string_pretty(&l).unwrap())
         }
     }
 
@@ -217,14 +279,15 @@ pub async fn update_tools(
     env: &mut Environment,
     system: &'_ System,
     update_type: UpdateType,
-) -> crate::Result<()> {
+) -> Result<()> {
     match update_type {
         UpdateType::All => {
             let tools: Vec<Tool> = env.tools.to_vec();
             let progress_bar = ProgressBar::new(tools.len() as u64);
             progress_bar.set_style(
                 ProgressStyle::default_bar()
-                    .template("{bar:75.cyan/blue} {pos:>7}/{len:7} {msg}")?,
+                    .template("{bar:75.cyan/blue} {pos:>7}/{len:7} {msg}")
+                    .unwrap(),
             );
 
             let mut failed_tools = Vec::new();
@@ -264,7 +327,7 @@ pub async fn update_tools(
     }
 }
 
-pub async fn sync_tools(env: &mut Environment, system: &'_ System) -> crate::Result<()> {
+pub async fn sync_tools(env: &mut Environment, system: &'_ System) -> Result<()> {
     let tools: Vec<Tool> = env.tools.to_vec();
     let progress_bar = ProgressBar::new(tools.len() as u64);
 
@@ -275,7 +338,7 @@ pub async fn sync_tools(env: &mut Environment, system: &'_ System) -> crate::Res
                 "Tool {} has been installed at version {}",
                 &tool.name, tool.current_version
             ),
-            Err(install_err) => anyhow::bail!("{:?}", install_err),
+            Err(install_err) => error!("Failed to install {}. {:?}", &tool.name, install_err),
         }
         progress_bar.inc(1);
     }
@@ -293,58 +356,46 @@ async fn handle_tool_install(
     tool: &'_ Tool,
     system: &'_ System,
     version: Option<Version>,
-) -> crate::Result<()> {
+) -> Result<()> {
     let split_org_repo: Vec<&str> = tool.name.split('/').collect();
     let owner = split_org_repo[0];
     let repo = split_org_repo[1];
 
-    let version = if let Some(version) = version {
-        version
-    } else {
-        match github::get_latest_release_tag(owner, repo).await {
-            Some(latest_release) => latest_release,
-            None => anyhow::bail!("Failed to find latest release for {owner}/{repo}"),
-        }
+    let version = match version {
+        Some(v) => v,
+        None => match github::get_latest_release_tag(owner, repo).await {
+            Some(rel) => rel,
+            None => return Err(CliActionError::ReleaseNotFound(tool.name.to_string())),
+        },
     };
 
     if tool.current_version != version.as_tag() {
-        let release = match github::get_specific_release_for_repo(owner, repo, &version).await {
-            Ok(release) => release,
-            Err(release_err) => {
-                anyhow::bail!(
-                    "Unable to get release {} for {owner}/{repo}. {:?}",
-                    version.as_tag(),
-                    release_err
-                )
-            }
-        };
+        let release = github::get_specific_release_for_repo(owner, repo, &version).await?;
 
-        match github::get_platform_specific_asset(&release, system, &tool.asset_pattern) {
-            Some(asset) => match env
-                .add_tool(
-                    &tool.name,
-                    &tool.alias,
-                    version,
-                    asset,
-                    &tool.asset_pattern,
-                    &tool.file_pattern,
-                )
-                .await
-            {
-                Ok(_) => (),
-                Err(add_tool_err) => anyhow::bail!(
-                    "Error installing latest version of {}. {:?}",
-                    &tool.name,
-                    add_tool_err
-                ),
-            },
-            None => anyhow::bail!(
-                "Unable to find an asset that matches '{}' for tool {}",
-                &tool.asset_pattern,
-                &tool.name
-            ),
+        let asset = github::get_platform_specific_asset(&release, system, &tool.asset_pattern);
+        if asset.is_none() {
+            return Err(CliActionError::AssetNotFoundError {
+                tool_name: tool.name.to_string(),
+                version,
+                arch: system.architecture.clone(),
+                os: system.os.clone(),
+            });
         }
-    }
-
+        let asset = asset.unwrap();
+        match env
+            .add_tool(
+                &tool.name,
+                &tool.alias,
+                version,
+                asset,
+                &tool.asset_pattern,
+                &tool.file_pattern,
+            )
+            .await
+        {
+            Ok(_) => (),
+            Err(add_tool_err) => return Err(add_tool_err.into()),
+        };
+    };
     Ok(())
 }

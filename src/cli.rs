@@ -1,14 +1,13 @@
-use {
-    crate::{
-        cli_actions::{self, Patterns, UpdateType},
-        environment::Environment,
-        system::System,
-    },
-    clap::{Parser, Subcommand, ValueEnum},
-    clap_verbosity_flag::Verbosity,
-    std::{fmt::Display, path::PathBuf},
-    tracing::debug,
+use crate::{
+    cli_actions::{self, CliActionError, Patterns, UpdateType},
+    environment::{Environment, EnvironmentError, EnvironmentLoadError},
+    system::System,
 };
+use clap::{Parser, Subcommand, ValueEnum};
+use clap_verbosity_flag::Verbosity;
+use std::{fmt::Display, path::PathBuf};
+use thiserror::Error;
+use tracing::debug;
 
 #[derive(Debug, Clone, Parser)]
 #[command(author, version, about, long_about = None)]
@@ -126,8 +125,20 @@ pub enum Actions {
     },
 }
 
+#[derive(Debug, Error)]
+pub enum ActionErrors {
+    #[error("...")]
+    EnvironmentError(#[from] EnvironmentError),
+    #[error("...")]
+    EnvironmentLoadError(#[from] EnvironmentLoadError),
+    #[error("...")]
+    ActionError(#[from] CliActionError),
+}
+
+type Result<T, E = ActionErrors> = std::result::Result<T, E>;
+
 impl Actions {
-    pub async fn execute(&self, config_dir: PathBuf, env: String) -> crate::Result<()> {
+    pub async fn execute(&self, config_dir: PathBuf, env: String) -> Result<()> {
         match self {
             Actions::Add {
                 name,
@@ -140,7 +151,7 @@ impl Actions {
                 debug!("CLI: Name `{name}`, alias `{:?}`, pattern `{:?}`, filter `{:?}`, pre_release `{pre_release}`, show `{show}`", alias, asset_pattern, file_filter);
                 let system = System::default();
                 let mut env = Environment::load(&config_dir, &env).await?;
-                cli_actions::add_new_tool(
+                Ok(cli_actions::add_new_tool(
                     &mut env,
                     name,
                     &system,
@@ -152,7 +163,7 @@ impl Actions {
                     *show,
                     *pre_release,
                 )
-                .await
+                .await?)
             }
             Actions::Remove {
                 name,
@@ -160,16 +171,16 @@ impl Actions {
                 link_only: _link_only,
             } => {
                 let mut env = Environment::load(&config_dir, &env).await?;
-                cli_actions::remove_tool(&mut env, name, *all).await
+                Ok(cli_actions::remove_tool(&mut env, name, *all).await?)
             }
             Actions::List { installed, output } => {
                 let env = Environment::load(&config_dir, &env).await?;
-                cli_actions::list_tools(&env, *installed, output.to_owned()).await
+                Ok(cli_actions::list_tools(&env, *installed, output.to_owned()).await?)
             }
             Actions::Update { name } => {
                 let system = System::default();
                 let mut env = Environment::load(&config_dir, &env).await?;
-                cli_actions::update_tools(
+                Ok(cli_actions::update_tools(
                     &mut env,
                     &system,
                     if let Some(name) = name {
@@ -178,7 +189,7 @@ impl Actions {
                         UpdateType::All
                     },
                 )
-                .await
+                .await?)
             }
             Actions::Completions { shell } => {
                 cli_actions::generate_completions(*shell);
@@ -215,7 +226,7 @@ impl Actions {
                 let system = System::default();
                 let mut env = Environment::load(&config_dir, &env).await?;
                 println!("Syncing versions with {} configuration.", env.name);
-                cli_actions::sync_tools(&mut env, &system).await
+                Ok(cli_actions::sync_tools(&mut env, &system).await?)
             }
         }
     }

@@ -1,20 +1,27 @@
-use {
-    crate::{
-        system::System,
-        version::{parse_version, Version},
-    },
-    octocrab::models::repos::{Asset, Release},
-    regex::Regex,
-    skim::prelude::*,
-    std::io::Cursor,
-    tracing::{debug, info},
+use crate::{
+    system::System,
+    version::{parse_version, Version},
 };
+use octocrab::models::repos::{Asset, Release};
+use regex::Regex;
+use skim::prelude::*;
+use std::io::Cursor;
+use thiserror::Error;
+use tracing::{debug, info};
+
+#[derive(Debug, Error)]
+pub enum GitHubError {
+    #[error("octocrab SDK encountered an error {0}")]
+    SdkError(#[from] octocrab::Error),
+}
+
+type Result<T, E = GitHubError> = std::result::Result<T, E>;
 
 pub async fn get_repo_releases(
     owner: &'_ str,
     repo: &'_ str,
     pre_release: bool,
-) -> super::Result<Vec<String>> {
+) -> Result<Vec<String>> {
     Ok(octocrab::instance()
         .repos(owner, repo)
         .releases()
@@ -43,7 +50,7 @@ pub async fn get_specific_release_for_repo(
     owner: &'_ str,
     repo: &'_ str,
     version: &'_ Version,
-) -> super::Result<Release> {
+) -> Result<Release> {
     info!(
         "Getting release({}) for {}/{}",
         version.as_tag(),
@@ -54,7 +61,7 @@ pub async fn get_specific_release_for_repo(
     if version == &Version::Latest {
         match octo.repos(owner, repo).releases().get_latest().await {
             Ok(latest_release) => Ok(latest_release),
-            Err(e) => anyhow::bail!(e),
+            Err(e) => Err(e.into()),
         }
     } else {
         match octo
@@ -72,7 +79,7 @@ pub async fn get_specific_release_for_repo(
                     .await
                 {
                     Ok(tagged_release) => Ok(tagged_release),
-                    Err(e) => anyhow::bail!(e),
+                    Err(e) => Err(e.into()),
                 }
             }
         }

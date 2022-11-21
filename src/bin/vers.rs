@@ -1,11 +1,9 @@
-use {
-    tracing::{debug, info},
-    tracing_subscriber::{filter::filter_fn, prelude::*},
-    vers::{cli::Opts, dirs},
-};
+use tracing::{debug, info};
+use tracing_subscriber::{filter::filter_fn, prelude::*};
+use vers::{cli::Opts, dirs};
 
 #[async_std::main]
-async fn main() -> vers::Result<()> {
+async fn main() -> anyhow::Result<()> {
     let opts = Opts::default();
 
     tracing_subscriber::registry()

@@ -1,13 +1,49 @@
-use {
-    crate::{archiver, dirs, download, tool::Tool, version::Version},
-    async_std::fs::read_to_string,
-    octocrab::models::repos::Asset,
-    serde::{Deserialize, Serialize},
-    serde_json::{from_str, to_string_pretty},
-    std::path::{Path, PathBuf},
-    tracing::{debug, error, info},
-    walkdir::{DirEntry, WalkDir},
-};
+use crate::{archiver, dirs, download, tool::Tool, version::Version};
+use async_std::fs::read_to_string;
+use octocrab::models::repos::Asset;
+use serde::{Deserialize, Serialize};
+use serde_json::{from_str, to_string_pretty};
+use std::path::{Path, PathBuf};
+use thiserror::Error;
+use tracing::{debug, error, info};
+use walkdir::{DirEntry, WalkDir};
+
+#[derive(Debug, Error)]
+pub enum EnvironmentLoadError {
+    #[error("Failed to create the directory '{path}'. {source}")]
+    FailedToCreateDirectory {
+        path: std::path::PathBuf,
+        source: std::io::Error,
+    },
+    #[error("Unable to read file '{file_path}'. {source:?}")]
+    FileReadError {
+        file_path: std::path::PathBuf,
+        source: std::io::Error,
+    },
+    #[error("Failed to deserialize file: {file_path}, using {format}. {msg}")]
+    DeserializationError {
+        file_path: std::path::PathBuf,
+        format: String,
+        msg: String,
+        // source: Box<dyn serde::de::Error>,
+    },
+}
+
+#[derive(Debug, Error)]
+pub enum EnvironmentError {
+    #[error("Unable to find binary '{expected_file_name}' within folder {search_base_path}")]
+    UnableToFindBinaryError {
+        expected_file_name: String,
+        search_base_path: std::path::PathBuf,
+    },
+    #[error("Failed to download file '{asset_name}' from '{asset_uri}'")]
+    AssetDownloadError {
+        asset_uri: reqwest::Url,
+        asset_name: String,
+    },
+}
+
+type Result<T, E = EnvironmentLoadError> = std::result::Result<T, E>;
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Environment {
@@ -35,14 +71,17 @@ impl Drop for Environment {
 }
 
 impl Environment {
-    pub async fn load<P: Into<PathBuf>>(config_dir: P, name: &'_ str) -> super::Result<Self> {
+    pub async fn load<P: Into<PathBuf>>(config_dir: P, name: &'_ str) -> Result<Self> {
         let config_dir: PathBuf = config_dir.into();
         let env_dir = config_dir.join("envs");
         if !env_dir.exists() {
             match std::fs::create_dir_all(&env_dir) {
                 Ok(_) => {}
                 Err(create_dir_err) => {
-                    anyhow::bail!("Unable to create the envs directory: {}", create_dir_err)
+                    return Err(EnvironmentLoadError::FailedToCreateDirectory {
+                        path: env_dir,
+                        source: create_dir_err,
+                    })
                 }
             }
         }
@@ -57,11 +96,11 @@ impl Environment {
                         .to_string();
                     Ok(res)
                 }
-                Err(serde_err) => anyhow::bail!(
-                    "Failed to deserialize {:?} as an environment. {:?}",
-                    env_path,
-                    serde_err
-                ),
+                Err(serde_err) => Err(EnvironmentLoadError::DeserializationError {
+                    file_path: env_path,
+                    format: "json".into(),
+                    msg: serde_err.to_string(),
+                }),
             },
             Err(read_err) => match read_err.kind() {
                 std::io::ErrorKind::NotFound => {
@@ -74,11 +113,10 @@ impl Environment {
                         tools: Vec::new(),
                     })
                 }
-                _ => anyhow::bail!(
-                    "Failed to read contents from file {:?}. {}",
-                    env_path,
-                    read_err
-                ),
+                _ => Err(EnvironmentLoadError::FileReadError {
+                    file_path: env_path,
+                    source: read_err,
+                }),
             },
         }
     }
@@ -91,7 +129,7 @@ impl Environment {
         asset: Asset,
         asset_pattern: &'_ str,
         file_pattern: &'_ str,
-    ) -> crate::Result<()> {
+    ) -> std::result::Result<(), EnvironmentError> {
         let env_base_path = Path::new(&self.base_dir);
         let tool_dir = dirs::get_tool_download_dir(env_base_path, name);
         info!("Actual tools dir: {:?}", tool_dir);
@@ -121,14 +159,13 @@ impl Environment {
                                 &asset_path.display(),
                                 extractor_name
                             );
-                            if let Some(bin_file) = find_binary(
-                                &tool_version_dir,
-                                if !file_pattern.is_empty() {
-                                    file_pattern
-                                } else {
-                                    alias
-                                },
-                            ) {
+                            let binary_file_name = if !file_pattern.is_empty() {
+                                file_pattern
+                            } else {
+                                alias
+                            };
+                            if let Some(bin_file) = find_binary(&tool_version_dir, binary_file_name)
+                            {
                                 create_symlink(&bin_file.into_path(), &symlink_dest);
                                 match self.tools.iter_mut().find(|t| t.name == name) {
                                     // add to the tools list
@@ -169,28 +206,27 @@ impl Environment {
                                     }
                                 };
                             } else {
-                                anyhow::bail!("Able to extract the file but not discover the required binary file")
+                                return Err(EnvironmentError::UnableToFindBinaryError {
+                                    expected_file_name: binary_file_name.to_string(),
+                                    search_base_path: tool_version_dir,
+                                });
                             }
                         }
                         Err(e) => {
                             error!(
                                 "Failed to extract using '{}' Error: {:?}",
-                                extractor_name, e
-                            )
+                                extractor_name, e,
+                            );
                         }
                     }
                 }
 
                 Ok(())
             }
-            Err(download_err) => {
-                anyhow::bail!(
-                    "Failed to download file {} from {}. {:?}",
-                    asset.name,
-                    asset.browser_download_url,
-                    download_err
-                )
-            }
+            Err(_) => Err(EnvironmentError::AssetDownloadError {
+                asset_uri: asset.browser_download_url,
+                asset_name: asset.name,
+            }),
         }
     }
 
