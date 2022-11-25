@@ -1,3 +1,6 @@
+// Turn off common dev assertions only for debug builds, release builds will still work as normal
+#![warn(clippy::all)]
+
 use tracing::{debug, info};
 use tracing_subscriber::{filter::filter_fn, prelude::*};
 use vers::{cli::Opts, dirs};
@@ -18,13 +21,13 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
-    let config_dir: std::path::PathBuf = if let Some(dir) = opts.data_dir {
-        dir
-    } else {
-        dirs::get_default_config_path()
+    let config_dir: std::path::PathBuf = match opts.data_dir {
+        Some(dir) => dir,
+        None => dirs::get_default_config_path(),
     };
     debug!("Config dir: {}", &config_dir.display());
 
+    // initialize Octocrab with a configured GitHub API token if available
     if let Some(api_token) = opts.github_api_token {
         info!("Initializing the GitHub client with token from CLI args");
         octocrab::initialise(octocrab::Octocrab::builder().personal_token(api_token))?;
@@ -35,6 +38,7 @@ async fn main() -> anyhow::Result<()> {
         )?;
     };
 
+    // Run the main logic
     opts.action.execute(config_dir, opts.env).await?;
 
     Ok(())

@@ -1,5 +1,5 @@
 use crate::{
-    cli_actions::{self, CliActionError, Patterns, UpdateType},
+    actions::{self, CliActionError},
     environment::{Environment, EnvironmentError, EnvironmentLoadError},
     system::System,
 };
@@ -33,9 +33,15 @@ pub struct Opts {
     pub action: Actions,
 }
 
+impl Opts {
+    fn new() -> Self {
+        Self::parse()
+    }
+}
+
 impl Default for Opts {
     fn default() -> Self {
-        Self::parse()
+        Self::new()
     }
 }
 
@@ -151,11 +157,11 @@ impl Actions {
                 debug!("CLI: Name `{name}`, alias `{:?}`, pattern `{:?}`, filter `{:?}`, pre_release `{pre_release}`, show `{show}`", alias, asset_pattern, file_filter);
                 let system = System::default();
                 let mut env = Environment::load(&config_dir, &env).await?;
-                Ok(cli_actions::add_new_tool(
+                Ok(actions::add_new_tool(
                     &mut env,
                     name,
                     &system,
-                    Patterns {
+                    actions::Patterns {
                         asset: asset_pattern.to_owned(),
                         file: file_filter.to_owned(),
                     },
@@ -171,28 +177,28 @@ impl Actions {
                 link_only: _link_only,
             } => {
                 let mut env = Environment::load(&config_dir, &env).await?;
-                Ok(cli_actions::remove_tool(&mut env, name, *all).await?)
+                Ok(actions::remove_tool(&mut env, name, *all).await?)
             }
             Actions::List { installed, output } => {
                 let env = Environment::load(&config_dir, &env).await?;
-                Ok(cli_actions::list_tools(&env, *installed, output.to_owned()).await?)
+                Ok(actions::list_tools(&env, *installed, output.to_owned()).await?)
             }
             Actions::Update { name } => {
                 let system = System::default();
                 let mut env = Environment::load(&config_dir, &env).await?;
-                Ok(cli_actions::update_tools(
+                Ok(actions::update_tools(
                     &mut env,
                     &system,
                     if let Some(name) = name {
-                        UpdateType::Specific(name.to_string())
+                        actions::UpdateType::Specific(name.to_string())
                     } else {
-                        UpdateType::All
+                        actions::UpdateType::All
                     },
                 )
                 .await?)
             }
             Actions::Completions { shell } => {
-                cli_actions::generate_completions(*shell);
+                actions::generate_completions(*shell);
                 Ok(())
             }
             Actions::Env {
@@ -226,7 +232,7 @@ impl Actions {
                 let system = System::default();
                 let mut env = Environment::load(&config_dir, &env).await?;
                 println!("Syncing versions with {} configuration.", env.name);
-                Ok(cli_actions::sync_tools(&mut env, &system).await?)
+                Ok(actions::sync_tools(&mut env, &system).await?)
             }
         }
     }

@@ -1,13 +1,10 @@
-// Turn off common dev assertions only for debug builds, release builds will still work as normal
-#![warn(clippy::all)]
-
-pub mod archiver;
+mod actions;
+mod archiver;
 pub mod cli;
-pub mod cli_actions;
 pub mod dirs;
-pub mod download;
-pub mod environment;
-pub mod github;
-pub mod system;
-pub mod tool;
-pub mod version;
+mod download;
+mod environment;
+mod github;
+mod system;
+mod tool;
+mod version;

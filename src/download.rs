@@ -7,19 +7,19 @@ use tracing::info;
 #[derive(Debug, Error)]
 pub enum DownloadError {
     #[error("Failed to create directory '{dir}'. {source}")]
-    CreateDirectoryError {
+    CreateDirectory {
         dir: std::path::PathBuf,
         source: std::io::Error,
     },
     #[error("...")]
-    FileWriteError {
+    FileWrite {
         file_path: std::path::PathBuf,
         source: std::io::Error,
     },
     #[error("...")]
-    ResponseBytesError(#[from] reqwest::Error),
+    ResponseBytes(#[from] reqwest::Error),
     #[error("...")]
-    HttpGetError {
+    HttpGet {
         url: reqwest::Url,
         source: reqwest::Error,
     },
@@ -37,7 +37,7 @@ pub async fn download_asset<P: Into<PathBuf>>(
         match create_dir_all(out_parent).await {
             Ok(_) => {}
             Err(create_dirs_err) => {
-                return Err(DownloadError::CreateDirectoryError {
+                return Err(DownloadError::CreateDirectory {
                     dir: out_parent.to_path_buf(),
                     source: create_dirs_err,
                 })
@@ -48,14 +48,14 @@ pub async fn download_asset<P: Into<PathBuf>>(
         Ok(download_result) => match download_result.bytes().await {
             Ok(download_bytes) => match write(&out_file_name, download_bytes).await {
                 Ok(_) => Ok(out_file_name),
-                Err(write_err) => Err(DownloadError::FileWriteError {
+                Err(write_err) => Err(DownloadError::FileWrite {
                     file_path: out_file_name,
                     source: write_err,
                 }),
             },
-            Err(bytes_err) => Err(DownloadError::ResponseBytesError(bytes_err)),
+            Err(bytes_err) => Err(DownloadError::ResponseBytes(bytes_err)),
         },
-        Err(down_err) => Err(DownloadError::HttpGetError {
+        Err(down_err) => Err(DownloadError::HttpGet {
             url: asset.browser_download_url.to_owned(),
             source: down_err,
         }),
