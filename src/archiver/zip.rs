@@ -13,17 +13,18 @@ impl Archiver for ZipArchiver {
             "Extracting {} using the 'Zip' Archiver",
             file_path.display()
         );
-        let mut archive = ZipArchive::new(std::fs::File::open(file_path).map_err(|e| {
-            ArchiverError::IoError {
+        let mut archive =
+            ZipArchive::new(
+                std::fs::File::open(file_path).map_err(|e| ArchiverError::Io {
+                    file_path: file_path.to_path_buf(),
+                    source: e,
+                })?,
+            )
+            .map_err(|zip_err| ArchiverError::ExtractorUnableToLoadFile {
+                extractor: "zip".to_string(),
                 file_path: file_path.to_path_buf(),
-                source: e,
-            }
-        })?)
-        .map_err(|zip_err| ArchiverError::ExtractorLoadError {
-            extractor: "zip".to_string(),
-            file_path: file_path.to_path_buf(),
-            message: zip_err.to_string(),
-        })?;
+                message: zip_err.to_string(),
+            })?;
 
         for i in 0..archive.len() {
             let mut archive_file = archive.by_index(i).unwrap();
@@ -40,7 +41,7 @@ impl Archiver for ZipArchiver {
             if archive_file.is_dir() {
                 // create directory
                 std::fs::create_dir_all(&out_path).map_err(|create_err| {
-                    ArchiverError::DirectorCreateError {
+                    ArchiverError::FailedToCreateDirectory {
                         file_path: out_path,
                         source: create_err,
                     }
@@ -48,13 +49,13 @@ impl Archiver for ZipArchiver {
             } else {
                 // write file
                 let mut out_file = std::fs::File::create(&out_path).map_err(|file_create_err| {
-                    ArchiverError::FileCreateError {
+                    ArchiverError::FailedToCreateFile {
                         file_path: out_path.clone(),
                         source: file_create_err,
                     }
                 })?;
                 std::io::copy(&mut archive_file, &mut out_file).map_err(|copy_err| {
-                    ArchiverError::IoError {
+                    ArchiverError::Io {
                         file_path: out_path.clone(),
                         source: copy_err,
                     }
@@ -65,7 +66,7 @@ impl Archiver for ZipArchiver {
 
                     if let Some(mode) = archive_file.unix_mode() {
                         std::fs::set_permissions(&out_path, std::fs::Permissions::from_mode(mode))
-                            .map_err(|permission_err| ArchiverError::IoError {
+                            .map_err(|permission_err| ArchiverError::Io {
                                 file_path: out_path,
                                 source: permission_err,
                             })?;

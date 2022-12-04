@@ -22,7 +22,7 @@ use crate::{
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum CliActionError {
+pub enum ActionsError {
     #[error("Failed to delete file '{file_name}'(symlink? {symlink}). {source}")]
     FileDelete {
         file_name: std::path::PathBuf,
@@ -47,13 +47,13 @@ pub enum CliActionError {
         arch: PlatformArchitecture,
         os: OperatingSystem,
     },
-    #[error("...")]
+    #[error("Error with the GitHub API {0}")]
     GitHub(#[from] GitHubError),
-    #[error("...")]
+    #[error("Environment error {0}")]
     Environment(#[from] EnvironmentError),
 }
 
-type Result<T, E = CliActionError> = std::result::Result<T, E>;
+type Result<T, E = ActionsError> = std::result::Result<T, E>;
 
 async fn handle_tool_install(
     env: &mut Environment,
@@ -69,7 +69,7 @@ async fn handle_tool_install(
         Some(v) => v,
         None => match github::get_latest_release_tag(owner, repo).await {
             Some(rel) => rel,
-            None => return Err(CliActionError::ReleaseNotFound(tool.name.to_string())),
+            None => return Err(ActionsError::ReleaseNotFound(tool.name.to_string())),
         },
     };
 
@@ -78,7 +78,7 @@ async fn handle_tool_install(
 
         let asset = github::get_platform_specific_asset(&release, system, &tool.asset_pattern);
         if asset.is_none() {
-            return Err(CliActionError::AssetNotFound {
+            return Err(ActionsError::AssetNotFound {
                 tool_name: tool.name.to_string(),
                 version,
                 arch: system.architecture.clone(),

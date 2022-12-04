@@ -45,9 +45,10 @@ pub async fn add_new_tool(
     let versions: Vec<String> = if split_name.len() > 1 {
         vec![split_name[1].to_string()]
     } else {
-        let versions = github::get_repo_releases(owner, repo, pre_release)
-            .await
-            .unwrap();
+        let versions = match github::get_repo_releases(owner, repo, pre_release).await {
+            Ok(res) => res,
+            Err(e) => return Err(e.into()),
+        };
 
         // if the user wants a list of the releases show that, otherwise just get the first result
         if show {

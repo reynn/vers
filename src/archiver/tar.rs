@@ -13,7 +13,7 @@ impl Archiver for TarArchiver {
             "Extracting {} using the 'Tar' Archiver",
             file_path.display()
         );
-        let file = File::open(file_path).map_err(|open_err| ArchiverError::IoError {
+        let file = File::open(file_path).map_err(|open_err| ArchiverError::Io {
             file_path: file_path.to_path_buf(),
             source: open_err,
         })?;

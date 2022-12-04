@@ -229,10 +229,6 @@ impl Environment {
             }),
         }
     }
-
-    pub fn get_env_path(&self) -> PathBuf {
-        self.base_dir_path.clone()
-    }
 }
 
 fn create_symlink(src: &'_ Path, dest: &'_ Path) {

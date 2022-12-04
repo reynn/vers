@@ -15,7 +15,7 @@ pub async fn remove_tool(
         if link_path.exists() {
             debug!("Removing symlink {:?}", &link_path);
             if let Err(remove_err) = std::fs::remove_file(&link_path) {
-                return Err(super::CliActionError::FileDelete {
+                return Err(super::ActionsError::FileDelete {
                     file_name: link_path,
                     symlink: true,
                     source: remove_err,
@@ -26,7 +26,7 @@ pub async fn remove_tool(
         if remove_all_versions {
             let tool_path = dirs::get_tool_download_dir(env_path, &env_tool.name);
             std::fs::remove_dir_all(&tool_path).map_err(|remove_dir_err| {
-                super::CliActionError::DirectoryDelete {
+                super::ActionsError::DirectoryDelete {
                     directory: tool_path,
                     source: remove_dir_err,
                 }
@@ -39,7 +39,7 @@ pub async fn remove_tool(
             );
             debug!("Removing tool directory {:?}", &tool_path);
             std::fs::remove_dir_all(&tool_path).map_err(|remove_dir_err| {
-                super::CliActionError::DirectoryDelete {
+                super::ActionsError::DirectoryDelete {
                     directory: tool_path,
                     source: remove_dir_err,
                 }
@@ -52,7 +52,7 @@ pub async fn remove_tool(
         Ok(())
     } else {
         // anyhow::bail!("{} is not found in the {} environment.", name, env.name)
-        Err(super::CliActionError::ToolNotFound {
+        Err(super::ActionsError::ToolNotFound {
             tool_name: name.to_string(),
             env_name: env.name.to_string(),
         })

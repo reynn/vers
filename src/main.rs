@@ -28,7 +28,7 @@ async fn main() -> anyhow::Result<()> {
     debug!("Config dir: {}", &config_dir.display());
 
     // initialize Octocrab with a configured GitHub API token if available
-    if let Some(api_token) = opts.github_api_token {
+    if let Some(api_token) = opts.github_token {
         info!("Initializing the GitHub client with token from CLI args");
         octocrab::initialise(octocrab::Octocrab::builder().personal_token(api_token))?;
     } else if let Some(env_api_token) = std::env::var_os("GITHUB_TOKEN") {

@@ -1,5 +1,5 @@
 use crate::{
-    actions::{self, CliActionError},
+    actions::{self, ActionsError},
     environment::{Environment, EnvironmentError, EnvironmentLoadError},
     system::System,
 };
@@ -23,7 +23,7 @@ pub struct Opts {
     pub env: String,
     /// A GitHub API token to use authenticated requests to the API
     #[arg(long)]
-    pub github_api_token: Option<String>,
+    pub github_token: Option<String>,
     /// Use a local environment
     ///
     /// Files will be stored in the current directory under a "hidden" folder
@@ -133,12 +133,12 @@ pub enum Actions {
 
 #[derive(Debug, Error)]
 pub enum ActionErrors {
-    #[error("...")]
+    #[error(transparent)]
     EnvironmentError(#[from] EnvironmentError),
-    #[error("...")]
+    #[error(transparent)]
     EnvironmentLoadError(#[from] EnvironmentLoadError),
-    #[error("...")]
-    ActionError(#[from] CliActionError),
+    #[error(transparent)]
+    ActionError(#[from] ActionsError),
 }
 
 type Result<T, E = ActionErrors> = std::result::Result<T, E>;

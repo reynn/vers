@@ -7,18 +7,18 @@ use tracing::info;
 #[derive(Debug, Error)]
 pub enum DownloadError {
     #[error("Failed to create directory '{dir}'. {source}")]
-    CreateDirectory {
+    CreateDirectoryFailed {
         dir: std::path::PathBuf,
         source: std::io::Error,
     },
-    #[error("...")]
+    #[error("Failed to write file '{file_path}', {source}")]
     FileWrite {
         file_path: std::path::PathBuf,
         source: std::io::Error,
     },
-    #[error("...")]
+    #[error(transparent)]
     ResponseBytes(#[from] reqwest::Error),
-    #[error("...")]
+    #[error("Failed to get '{url}': {source}")]
     HttpGet {
         url: reqwest::Url,
         source: reqwest::Error,
@@ -37,7 +37,7 @@ pub async fn download_asset<P: Into<PathBuf>>(
         match create_dir_all(out_parent).await {
             Ok(_) => {}
             Err(create_dirs_err) => {
-                return Err(DownloadError::CreateDirectory {
+                return Err(DownloadError::CreateDirectoryFailed {
                     dir: out_parent.to_path_buf(),
                     source: create_dirs_err,
                 })

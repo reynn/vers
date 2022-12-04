@@ -1,5 +1,8 @@
 use regex::Regex;
-use std::{env::consts::{ARCH, OS}, fmt::Display};
+use std::{
+    env::consts::{ARCH, OS},
+    fmt::Display,
+};
 use tracing::debug;
 
 #[derive(Debug, Clone)]

@@ -11,7 +11,7 @@ use tracing::{debug, info};
 
 #[derive(Debug, Error)]
 pub enum GitHubError {
-    #[error("octocrab SDK encountered an error {0}")]
+    #[error("GitHub SDK encountered an error {0}")]
     SdkError(#[from] octocrab::Error),
 }
 

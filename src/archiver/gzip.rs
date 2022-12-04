@@ -14,19 +14,20 @@ impl Archiver for GzipArchiver {
         let out_file_path = out_dir.join(file_path.file_stem().unwrap());
         let mut gz =
             flate2::read::MultiGzDecoder::new(File::open(file_path).map_err(|open_err| {
-                ArchiverError::IoError {
+                ArchiverError::Io {
                     file_path: file_path.to_path_buf(),
                     source: open_err,
                 }
             })?);
 
-        let mut out_file =
-            File::create(&out_file_path).map_err(|create_err| ArchiverError::FileCreateError {
+        let mut out_file = File::create(&out_file_path).map_err(|create_err| {
+            ArchiverError::FailedToCreateFile {
                 file_path: out_file_path.to_path_buf(),
                 source: create_err,
-            })?;
+            }
+        })?;
 
-        std::io::copy(&mut gz, &mut out_file).map_err(|copy_err| ArchiverError::IoError {
+        std::io::copy(&mut gz, &mut out_file).map_err(|copy_err| ArchiverError::Io {
             file_path: out_file_path.clone(),
             source: copy_err,
         })?;

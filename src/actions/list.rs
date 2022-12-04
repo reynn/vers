@@ -12,9 +12,7 @@ pub async fn list_tools(
     let tools = &env.tools;
 
     if tools.is_empty() {
-        return Err(super::CliActionError::EmptyEnvironment(
-            env.name.to_string(),
-        ));
+        return Err(super::ActionsError::EmptyEnvironment(env.name.to_string()));
     }
 
     #[derive(Tabled, Serialize, PartialEq, PartialOrd, Eq, Ord)]
