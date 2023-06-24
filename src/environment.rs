@@ -1,4 +1,3 @@
-use crate::{archiver, dirs, download, tool::Tool, version::Version};
 use async_std::fs::read_to_string;
 use octocrab::models::repos::Asset;
 use serde::{Deserialize, Serialize};
@@ -7,6 +6,8 @@ use std::path::{Path, PathBuf};
 use thiserror::Error;
 use tracing::{debug, error, info};
 use walkdir::{DirEntry, WalkDir};
+
+use crate::{archiver, dirs, download, tool::Tool, version::Version};
 
 #[derive(Debug, Error)]
 pub enum EnvironmentLoadError {
@@ -49,8 +50,8 @@ type Result<T, E = EnvironmentLoadError> = std::result::Result<T, E>;
 pub struct Environment {
     pub name: String,
     pub base_dir: String,
-    #[serde(skip)]
-    base_dir_path: PathBuf,
+    // #[serde(skip)]
+    // base_dir_path: PathBuf,
     pub tools: Vec<Tool>,
 }
 
@@ -109,7 +110,7 @@ impl Environment {
                     Ok(Environment {
                         name: name.to_string(),
                         base_dir: base_dir.clone(),
-                        base_dir_path: Path::new(&base_dir).to_path_buf(),
+                        //base_dir_path: Path::new(&base_dir).to_path_buf(),
                         tools: Vec::new(),
                     })
                 }

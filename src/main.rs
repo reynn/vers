@@ -30,12 +30,18 @@ async fn main() -> anyhow::Result<()> {
     // initialize Octocrab with a configured GitHub API token if available
     if let Some(api_token) = opts.github_token {
         info!("Initializing the GitHub client with token from CLI args");
-        octocrab::initialise(octocrab::Octocrab::builder().personal_token(api_token))?;
+        octocrab::initialise(
+            octocrab::Octocrab::builder()
+                .personal_token(api_token)
+                .build()?,
+        );
     } else if let Some(env_api_token) = std::env::var_os("GITHUB_TOKEN") {
         info!("Initializing the GitHub client with token from environment");
         octocrab::initialise(
-            octocrab::Octocrab::builder().personal_token(env_api_token.to_str().unwrap().into()),
-        )?;
+            octocrab::Octocrab::builder()
+                .personal_token(env_api_token.to_str().unwrap().into())
+                .build()?,
+        );
     };
 
     // Run the main logic

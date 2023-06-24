@@ -1,6 +1,9 @@
 use crate::{cli, environment::Environment};
 use serde::Serialize;
-use tabled::{object::Segment, Alignment, Modify, Panel, Style, Table, Tabled};
+use tabled::{
+    settings::{object::Segment, Alignment, Modify, Panel, Style},
+    Table, Tabled,
+};
 use tracing::info;
 
 pub async fn list_tools(

@@ -1,4 +1,4 @@
-use async_std::fs::{create_dir_all, write};
+// use async_std::fs::{create_dir_all, write};
 use octocrab::models::repos::Asset;
 use std::path::PathBuf;
 use thiserror::Error;
@@ -34,7 +34,7 @@ pub async fn download_asset<P: Into<PathBuf>>(
     let out_file_name = out_file_name.join(&asset.name);
     info!("Downloading file to {:?}", &out_file_name);
     if let Some(out_parent) = &out_file_name.parent() {
-        match create_dir_all(out_parent).await {
+        match async_std::fs::create_dir_all(out_parent).await {
             Ok(_) => {}
             Err(create_dirs_err) => {
                 return Err(DownloadError::CreateDirectoryFailed {
@@ -46,7 +46,7 @@ pub async fn download_asset<P: Into<PathBuf>>(
     };
     match reqwest::get(asset.browser_download_url.as_str()).await {
         Ok(download_result) => match download_result.bytes().await {
-            Ok(download_bytes) => match write(&out_file_name, download_bytes).await {
+            Ok(download_bytes) => match async_std::fs::write(&out_file_name, download_bytes).await {
                 Ok(_) => Ok(out_file_name),
                 Err(write_err) => Err(DownloadError::FileWrite {
                     file_path: out_file_name,
