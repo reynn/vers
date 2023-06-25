@@ -7,12 +7,11 @@ use clap::{Parser, Subcommand, ValueEnum};
 use clap_verbosity_flag::Verbosity;
 use std::{fmt::Display, path::PathBuf};
 use thiserror::Error;
-use tracing::debug;
 
 #[derive(Debug, Clone, Parser)]
 #[command(author, version, about, long_about = None)]
 #[command(propagate_version = true)]
-pub struct Opts {
+pub struct Cli {
     #[command(flatten)]
     pub verbose: Verbosity,
     /// Where to store the data application data
@@ -33,13 +32,13 @@ pub struct Opts {
     pub action: Actions,
 }
 
-impl Opts {
+impl Cli {
     fn new() -> Self {
         Self::parse()
     }
 }
 
-impl Default for Opts {
+impl Default for Cli {
     fn default() -> Self {
         Self::new()
     }
@@ -144,7 +143,9 @@ pub enum ActionErrors {
 type Result<T, E = ActionErrors> = std::result::Result<T, E>;
 
 impl Actions {
-    pub async fn execute(&self, config_dir: PathBuf, env: String) -> Result<()> {
+    pub async fn execute(&self, config_dir: PathBuf, env_name: &'_ str) -> Result<()> {
+        let system = System::default();
+        let mut loaded_env = Environment::load(&config_dir, env_name).await?;
         match self {
             Actions::Add {
                 name,
@@ -153,87 +154,58 @@ impl Actions {
                 file_filter,
                 pre_release,
                 show,
-            } => {
-                debug!("CLI: Name `{name}`, alias `{:?}`, pattern `{:?}`, filter `{:?}`, pre_release `{pre_release}`, show `{show}`", alias, asset_pattern, file_filter);
-                let system = System::default();
-                let mut env = Environment::load(&config_dir, &env).await?;
-                Ok(actions::add_new_tool(
-                    &mut env,
-                    name,
-                    &system,
-                    actions::Patterns {
-                        asset: asset_pattern.to_owned(),
-                        file: file_filter.to_owned(),
-                    },
-                    alias.to_owned(),
-                    *show,
-                    *pre_release,
-                )
-                .await?)
-            }
+            } => Ok(actions::add_new_tool(
+                &mut loaded_env,
+                name,
+                &system,
+                actions::Patterns {
+                    asset: asset_pattern.to_owned(),
+                    file: file_filter.to_owned(),
+                },
+                alias.to_owned(),
+                *show,
+                *pre_release,
+            )
+            .await?),
             Actions::Remove {
                 name,
                 all,
                 link_only: _link_only,
-            } => {
-                let mut env = Environment::load(&config_dir, &env).await?;
-                Ok(actions::remove_tool(&mut env, name, *all).await?)
-            }
+            } => Ok(actions::remove_tool(&mut loaded_env, name, *all).await?),
             Actions::List { installed, output } => {
-                let env = Environment::load(&config_dir, &env).await?;
-                Ok(actions::list_tools(&env, *installed, output.to_owned()).await?)
+                Ok(actions::list_tools(&mut loaded_env, *installed, output.to_owned()).await?)
             }
-            Actions::Update { name } => {
-                let system = System::default();
-                let mut env = Environment::load(&config_dir, &env).await?;
-                Ok(actions::update_tools(
-                    &mut env,
-                    &system,
-                    if let Some(name) = name {
-                        actions::UpdateType::Specific(name.to_string())
-                    } else {
-                        actions::UpdateType::All
-                    },
-                )
-                .await?)
-            }
-            Actions::Completions { shell } => {
-                actions::generate_completions(*shell);
-                Ok(())
-            }
+            Actions::Update { name } => Ok(actions::update_tools(
+                &mut loaded_env,
+                &system,
+                if let Some(name) = name {
+                    actions::UpdateType::Specific(name.to_string())
+                } else {
+                    actions::UpdateType::All
+                },
+            )
+            .await?),
+            Actions::Completions { shell } => Ok(actions::generate_completions(shell)),
             Actions::Env {
                 name,
                 shell,
                 bare_path,
             } => {
-                let name: String = match name {
-                    Some(name) => name.to_string(),
-                    None => env,
-                };
-                let env = Environment::load(&config_dir, &name).await?;
-                if *bare_path {
-                    println!("{}", env.base_dir)
-                } else if let Some(shell) = shell {
-                    match shell {
-                        clap_complete::Shell::Bash | clap_complete::Shell::Zsh => {
-                            println!("export PATH=\"{}:$PATH\"", env.base_dir)
-                        }
-                        clap_complete::Shell::Elvish => todo!(),
-                        clap_complete::Shell::Fish => println!("set -p PATH \"{}\"", env.base_dir),
-                        clap_complete::Shell::PowerShell => {
-                            println!("$env:Path += ';{}' ", env.base_dir)
-                        }
-                        _ => (),
+                // if the user provided an environment name that differs from the one we
+                // already have loaded we need to load the correct one
+                let env = if let Some(specific_name) = name {
+                    if specific_name != &loaded_env.name {
+                        Environment::load(&config_dir, specific_name).await?
+                    } else {
+                        loaded_env
                     }
+                } else {
+                    loaded_env
                 };
-                Ok(())
+
+                Ok(actions::show_env_config(&env, *bare_path, *shell))
             }
-            Actions::Sync => {
-                let system = System::default();
-                let mut env = Environment::load(&config_dir, &env).await?;
-                println!("Syncing versions with {} configuration.", env.name);
-                Ok(actions::sync_tools(&mut env, &system).await?)
-            }
+            Actions::Sync => Ok(actions::sync_tools(&mut loaded_env, &system).await?),
         }
     }
 }

@@ -3,11 +3,11 @@
 
 use tracing::{debug, info};
 use tracing_subscriber::{filter::filter_fn, prelude::*};
-use vers::{cli::Opts, dirs};
+use vers::{cli::Cli, dirs};
 
 #[async_std::main]
-async fn main() -> anyhow::Result<()> {
-    let opts = Opts::default();
+async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
+    let opts = Cli::default();
 
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new(
@@ -45,7 +45,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     // Run the main logic
-    opts.action.execute(config_dir, opts.env).await?;
+    opts.action.execute(config_dir, &opts.env).await?;
 
     Ok(())
 }

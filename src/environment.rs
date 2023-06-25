@@ -1,3 +1,4 @@
+use crate::{archiver, dirs, download, tool::Tool, version::Version};
 use async_std::fs::read_to_string;
 use octocrab::models::repos::Asset;
 use serde::{Deserialize, Serialize};
@@ -6,8 +7,6 @@ use std::path::{Path, PathBuf};
 use thiserror::Error;
 use tracing::{debug, error, info};
 use walkdir::{DirEntry, WalkDir};
-
-use crate::{archiver, dirs, download, tool::Tool, version::Version};
 
 #[derive(Debug, Error)]
 pub enum EnvironmentLoadError {

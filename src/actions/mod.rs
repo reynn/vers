@@ -1,5 +1,6 @@
 mod add;
 mod completions;
+mod env;
 mod list;
 mod remove;
 mod sync;
@@ -7,6 +8,7 @@ mod update;
 
 pub use add::{add_new_tool, Patterns};
 pub use completions::generate_completions;
+pub use env::show_env_config;
 pub use list::list_tools;
 pub use remove::remove_tool;
 pub use sync::sync_tools;

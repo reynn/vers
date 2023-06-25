@@ -13,6 +13,14 @@ pub fn get_default_config_path() -> PathBuf {
     }
 }
 
+pub fn get_environment_link_path(base_path: &'_ Path, env_name: &'_ str) -> PathBuf {
+    base_path.join("envs").join(env_name)
+}
+
+pub fn get_environment_config_file_path(base_path: &'_ Path, env_name: &'_ str) -> PathBuf {
+    base_path.join("envs").join(format!("{}.json", env_name))
+}
+
 pub fn get_tool_link_path(base_path: &'_ Path, tool_alias: &'_ str) -> PathBuf {
     base_path.join(tool_alias)
 }
