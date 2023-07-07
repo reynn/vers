@@ -47,3 +47,8 @@ walkdir = "2.3"
 tar = "0.4"
 zip = "0.6"
 flate2 = "1.0"
+vers-types = { path = "crates/types" }
+vers-plugin = { path = "crates/plugins" }
+
+[workspace]
+members = ["crates/*"]

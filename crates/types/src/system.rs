@@ -3,7 +3,6 @@ use std::{
     env::consts::{ARCH, OS},
     fmt::Display,
 };
-use tracing::debug;
 
 #[derive(Debug, Clone)]
 pub struct System {
@@ -35,13 +34,6 @@ impl System {
     pub fn is_match(&self, s: &'_ str) -> bool {
         let os_regex = self.os.get_match_regex();
         let arch_regex = self.architecture.get_match_regex();
-
-        debug!(
-            "System OS Regex[{}], Arch Regex[{}], matching {}",
-            os_regex.to_string(),
-            arch_regex.to_string(),
-            s
-        );
         os_regex.is_match(s) && arch_regex.is_match(s)
     }
 }
