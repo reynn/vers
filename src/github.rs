@@ -107,6 +107,14 @@ pub fn get_platform_specific_asset(
         .assets
         .iter()
         .filter_map(|asset| {
+            // Skip checksum files.
+            if asset.name.ends_with(".sha256") {
+                None
+            } else {
+                Some(asset.clone())
+            }
+        })
+        .filter_map(|asset| {
             if !user_pattern.is_empty() {
                 let r = Regex::new(user_pattern).unwrap_or_else(|_| {
                     panic!("{} is not a valid Regular Expression", user_pattern)
