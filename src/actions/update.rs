@@ -31,7 +31,10 @@ pub async fn update_tools(
                 }
                 progress_bar.inc(1);
             }
-            error!("{}", failed_tools.join("\n"));
+
+            if !failed_tools.is_empty() {
+                error!("{}", failed_tools.join("\n"));
+            }
 
             Ok(())
         }
@@ -44,11 +47,15 @@ pub async fn update_tools(
             } else {
                 None
             };
-            if let Some(tool) = tools.iter().find(|t| t.name == split_name[0]) {
-                info!("Tool: {:?}", tool);
+
+            if let Some(tool) = tools
+                .iter()
+                .find(|t| t.name == split_name[0] || t.alias == split_name[0])
+            {
+                info!("Updating: {:?}", tool);
 
                 match super::handle_tool_install(env, tool, system, version).await {
-                    Ok(_) => info!("Tool {} has been updated.", &tool.name),
+                    Ok(_) => info!("{} has been updated.", &tool.name),
                     Err(install_err) => error!("{:?}", install_err),
                 }
             } else {
