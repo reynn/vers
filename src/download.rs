@@ -46,13 +46,15 @@ pub async fn download_asset<P: Into<PathBuf>>(
     };
     match reqwest::get(asset.browser_download_url.as_str()).await {
         Ok(download_result) => match download_result.bytes().await {
-            Ok(download_bytes) => match async_std::fs::write(&out_file_name, download_bytes).await {
-                Ok(_) => Ok(out_file_name),
-                Err(write_err) => Err(DownloadError::FileWrite {
-                    file_path: out_file_name,
-                    source: write_err,
-                }),
-            },
+            Ok(download_bytes) => {
+                match async_std::fs::write(&out_file_name, download_bytes).await {
+                    Ok(_) => Ok(out_file_name),
+                    Err(write_err) => Err(DownloadError::FileWrite {
+                        file_path: out_file_name,
+                        source: write_err,
+                    }),
+                }
+            }
             Err(bytes_err) => Err(DownloadError::ResponseBytes(bytes_err)),
         },
         Err(down_err) => Err(DownloadError::HttpGet {
