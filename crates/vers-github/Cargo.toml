@@ -1,11 +1,13 @@
 [package]
-name = "types"
+name = "vers-github"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-semver = "1.0"
-test-case = "3.1"
-regex = "1.9"
+octocrab = "0.28"
+vers-plugin = { path = "../vers-plugin" }
+vers-types = { path = "../vers-types" }
+tracing = "0.1"
+regex = "1.0"

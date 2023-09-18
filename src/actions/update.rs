@@ -1,6 +1,7 @@
-use crate::{environment::Environment, system::System, tool::Tool, version::parse_version};
+use crate::environment::Environment;
 use indicatif::{ProgressBar, ProgressStyle};
 use tracing::{error, info};
+use vers_types::{parse_version, System, Tool};
 
 pub enum UpdateType {
     All,

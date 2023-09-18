@@ -1,6 +1,6 @@
 [package]
 name = "vers"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 description = "Install and manage dev tools with multiple environments"
 repository = "https://github.com/reynn/vers"
@@ -29,7 +29,7 @@ clap_complete = "4.3"
 directories-next = "2.0"
 indicatif = "0.17"
 is_executable = "1.0"
-octocrab = "0.25"
+octocrab = "0.28"
 once_cell = "1.18"
 regex = "1.8"
 reqwest = "0.11"
@@ -47,8 +47,8 @@ walkdir = "2.3"
 tar = "0.4"
 zip = "0.6"
 flate2 = "1.0"
-vers-types = { path = "crates/types" }
-vers-plugin = { path = "crates/plugins" }
+vers-plugin = { path = "crates/vers-plugin" }
+vers-types = { path = "crates/vers-types" }
 
 [workspace]
 members = ["crates/*"]

@@ -1,6 +1,7 @@
-use crate::{environment::Environment, system::System, tool::Tool, version::parse_version};
+use crate::environment::Environment;
 use indicatif::ProgressBar;
 use tracing::{error, info};
+use vers_types::{parse_version, System, Tool};
 
 pub async fn sync_tools(env: &mut Environment, system: &'_ System) -> super::Result<()> {
     let tools: Vec<Tool> = env.tools.to_vec();

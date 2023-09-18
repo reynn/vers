@@ -17,11 +17,9 @@ pub use update::{update_tools, UpdateType};
 use crate::{
     environment::{Environment, EnvironmentError},
     github::{self, GitHubError},
-    system::{OperatingSystem, PlatformArchitecture, System},
-    tool::Tool,
-    version::Version,
 };
 use thiserror::Error;
+use vers_types::{OperatingSystem, PlatformArchitecture, System, Tool, Version};
 
 #[derive(Debug, Error)]
 pub enum ActionsError {

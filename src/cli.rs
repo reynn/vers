@@ -1,12 +1,12 @@
 use crate::{
     actions::{self, ActionsError},
     environment::{Environment, EnvironmentError, EnvironmentLoadError},
-    system::System,
 };
 use clap::{Parser, Subcommand, ValueEnum};
 use clap_verbosity_flag::Verbosity;
 use std::{fmt::Display, path::PathBuf};
 use thiserror::Error;
+use vers_types::System;
 
 #[derive(Debug, Clone, Parser)]
 #[command(author, version, about, long_about = None)]

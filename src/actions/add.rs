@@ -1,16 +1,11 @@
-use crate::{
-    environment::Environment,
-    github,
-    system::System,
-    tool::Tool,
-    version::{parse_version, Version},
-};
+use crate::{environment::Environment, github};
 use skim::{
     prelude::{SkimItemReader, SkimOptionsBuilder},
     Skim,
 };
 use std::io::Cursor;
 use tracing::{error, info};
+use vers_types::{parse_version, System, Version, Tool};
 
 pub struct Patterns {
     pub asset: Option<String>,

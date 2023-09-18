@@ -1,4 +1,3 @@
-// Turn off common dev assertions only for debug builds, release builds will still work as normal
 #![warn(clippy::all)]
 
 use tracing::{debug, info};
@@ -35,11 +34,11 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 .personal_token(api_token)
                 .build()?,
         );
-    } else if let Some(env_api_token) = std::env::var_os("GITHUB_TOKEN") {
+    } else if let Ok(env_api_token) = std::env::var("GITHUB_TOKEN") {
         info!("Initializing the GitHub client with token from environment");
         octocrab::initialise(
             octocrab::Octocrab::builder()
-                .personal_token(env_api_token.to_str().unwrap().into())
+                .personal_token(env_api_token)
                 .build()?,
         );
     };

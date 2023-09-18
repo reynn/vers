@@ -5,6 +5,3 @@ pub mod dirs;
 mod download;
 mod environment;
 mod github;
-mod system;
-mod tool;
-mod version;

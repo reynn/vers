@@ -1,4 +1,4 @@
-use crate::{archiver, dirs, download, tool::Tool, version::Version};
+use crate::{archiver, dirs, download};
 use async_std::fs::read_to_string;
 use octocrab::models::repos::Asset;
 use serde::{Deserialize, Serialize};
@@ -6,6 +6,7 @@ use serde_json::{from_str, to_string_pretty};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 use tracing::{debug, error, info};
+use vers_types::*;
 use walkdir::{DirEntry, WalkDir};
 
 #[derive(Debug, Error)]
