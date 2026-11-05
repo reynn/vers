@@ -97,6 +97,7 @@ jobs:
           profile: minimal
           override: true
 
-      # Run the ignored tests that expect the above setup
+      # Run the test suite. `--include-ignored` requires nightly, and the
+      # suite currently has no ignored tests, so it is not needed.
       - name: Build | Test
-        run: cargo test --workspace --locked --all-features -- -Z unstable-options --include-ignored
+        run: cargo test --workspace --locked --all-features

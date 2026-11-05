@@ -38,6 +38,7 @@ pub enum ArchiverError {
 type Result<T, E = ArchiverError> = std::result::Result<T, E>;
 
 #[async_trait]
+#[allow(clippy::double_must_use)]
 pub trait Archiver {
     async fn extract_to(&self, file_path: &'_ Path, out_dir: &'_ Path) -> Result<()>;
     async fn extract(&self, file_path: &'_ Path) -> Result<()>;
