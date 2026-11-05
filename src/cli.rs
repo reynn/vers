@@ -1,6 +1,6 @@
 use crate::{
     actions::{self, ActionsError},
-    environment::{Environment, EnvironmentError, EnvironmentLoadError},
+    environment::{Environment, EnvironmentError, EnvironmentFileError},
     system::System,
 };
 use clap::{Parser, Subcommand, ValueEnum};
@@ -135,7 +135,7 @@ pub enum ActionErrors {
     #[error(transparent)]
     EnvironmentError(#[from] EnvironmentError),
     #[error(transparent)]
-    EnvironmentLoadError(#[from] EnvironmentLoadError),
+    EnvironmentFileError(#[from] EnvironmentFileError),
     #[error(transparent)]
     ActionError(#[from] ActionsError),
 }
@@ -143,9 +143,24 @@ pub enum ActionErrors {
 type Result<T, E = ActionErrors> = std::result::Result<T, E>;
 
 impl Actions {
+    /// Whether this action can mutate (and therefore needs to persist) the environment.
+    fn writes_environment(&self) -> bool {
+        matches!(
+            self,
+            Actions::Add { .. } | Actions::Remove { .. } | Actions::Update { .. } | Actions::Sync
+        )
+    }
+
     pub async fn execute(&self, config_dir: PathBuf, env_name: &'_ str) -> Result<()> {
         let system = System::default();
-        let mut loaded_env = Environment::load(&config_dir, env_name).await?;
+        // Mutating commands hold the environment lock for the whole
+        // read/modify/write cycle; read-only commands do not lock or save.
+        let mut loaded_env = if self.writes_environment() {
+            Environment::load_for_update(&config_dir, env_name).await?
+        } else {
+            Environment::load(&config_dir, env_name).await?
+        };
+
         match self {
             Actions::Add {
                 name,
@@ -154,37 +169,49 @@ impl Actions {
                 file_filter,
                 pre_release,
                 show,
-            } => Ok(actions::add_new_tool(
-                &mut loaded_env,
-                name,
-                &system,
-                actions::Patterns {
-                    asset: asset_pattern.to_owned(),
-                    file: file_filter.to_owned(),
-                },
-                alias.to_owned(),
-                *show,
-                *pre_release,
-            )
-            .await?),
+            } => {
+                actions::add_new_tool(
+                    &mut loaded_env,
+                    name,
+                    &system,
+                    actions::Patterns {
+                        asset: asset_pattern.to_owned(),
+                        file: file_filter.to_owned(),
+                    },
+                    alias.to_owned(),
+                    *show,
+                    *pre_release,
+                )
+                .await?;
+                loaded_env.save()?;
+                Ok(())
+            }
             Actions::Remove {
                 name,
                 all,
                 link_only: _link_only,
-            } => Ok(actions::remove_tool(&mut loaded_env, name, *all).await?),
-            Actions::List { installed, output } => {
-                Ok(actions::list_tools(&mut loaded_env, *installed, output.to_owned()).await?)
+            } => {
+                actions::remove_tool(&mut loaded_env, name, *all).await?;
+                loaded_env.save()?;
+                Ok(())
             }
-            Actions::Update { name } => Ok(actions::update_tools(
-                &mut loaded_env,
-                &system,
-                if let Some(name) = name {
-                    actions::UpdateType::Specific(name.to_string())
-                } else {
-                    actions::UpdateType::All
-                },
-            )
-            .await?),
+            Actions::List { installed, output } => {
+                Ok(actions::list_tools(&loaded_env, *installed, output.to_owned()).await?)
+            }
+            Actions::Update { name } => {
+                actions::update_tools(
+                    &mut loaded_env,
+                    &system,
+                    if let Some(name) = name {
+                        actions::UpdateType::Specific(name.to_string())
+                    } else {
+                        actions::UpdateType::All
+                    },
+                )
+                .await?;
+                loaded_env.save()?;
+                Ok(())
+            }
             Actions::Completions { shell } => Ok(actions::generate_completions(shell)),
             Actions::Env {
                 name,
@@ -205,7 +232,11 @@ impl Actions {
 
                 Ok(actions::show_env_config(&env, *bare_path, *shell))
             }
-            Actions::Sync => Ok(actions::sync_tools(&mut loaded_env, &system).await?),
+            Actions::Sync => {
+                actions::sync_tools(&mut loaded_env, &system).await?;
+                loaded_env.save()?;
+                Ok(())
+            }
         }
     }
 }
