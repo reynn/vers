@@ -72,11 +72,11 @@ pub async fn add_new_tool(
             })
             .unwrap_or_default()
         } else {
-            match versions.get(0) {
+            match versions.first() {
                 Some(version) => vec![version.into()],
                 None => vec![],
             }
-            // vec![versions.get(0).unwrap().to_string()]
+            // vec![versions.first().unwrap().to_string()]
         }
     };
 
@@ -92,7 +92,7 @@ pub async fn add_new_tool(
         );
 
         match super::handle_tool_install(env, &tool, system, Some(parsed_version)).await {
-            Ok(_) => println!("Installation of tool {} complete.", &tool.name),
+            Ok(_) => println!("Installation of tool {} complete.", tool.name),
             Err(install_err) => error!("{:?}", install_err),
         }
     }

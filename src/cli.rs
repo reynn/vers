@@ -212,7 +212,10 @@ impl Actions {
                 loaded_env.save()?;
                 Ok(())
             }
-            Actions::Completions { shell } => Ok(actions::generate_completions(shell)),
+            Actions::Completions { shell } => {
+                actions::generate_completions(shell);
+                Ok(())
+            }
             Actions::Env {
                 name,
                 shell,
@@ -230,7 +233,8 @@ impl Actions {
                     loaded_env
                 };
 
-                Ok(actions::show_env_config(&env, *bare_path, *shell))
+                actions::show_env_config(&env, *bare_path, *shell);
+                Ok(())
             }
             Actions::Sync => {
                 actions::sync_tools(&mut loaded_env, &system).await?;

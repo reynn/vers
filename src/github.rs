@@ -156,10 +156,10 @@ pub fn get_platform_specific_asset(
                     .collect()
             })
             .unwrap();
-            Some(selected_item.get(0).unwrap().to_owned())
+            Some(selected_item.first().unwrap().to_owned())
         }
         // if we only get one result we can just return that as is
-        1 => Some(platform_assets.get(0).unwrap().clone()),
+        1 => Some(platform_assets.first().unwrap().clone()),
         _ => None,
     }
 }

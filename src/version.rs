@@ -1,9 +1,10 @@
 use std::fmt::Display;
 use tracing::info;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub enum Version {
     /// The latest version of a tool as determined by the tool managers
+    #[default]
     Latest,
     /// SemVer should follow the patterns outlined at [SemVer.org](https://semver.org/)
     SemVer(semver::Version),
@@ -13,14 +14,8 @@ pub enum Version {
     Stable,
     /// Similar to Latest except will use pre-releases if there are any available for the tool
     PreRelease,
-    ///
+    /// An arbitrary version string that could not be parsed as SemVer.
     Simple(String),
-}
-
-impl Default for Version {
-    fn default() -> Self {
-        Self::Latest
-    }
 }
 
 impl Version {
