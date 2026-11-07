@@ -85,7 +85,9 @@ pub struct Environment {
 
 impl Environment {
     pub async fn load<P: Into<PathBuf>>(config_dir: P, name: &'_ str) -> Result<Self> {
-        let env_dir = Self::ensure_env_dir(config_dir.into())?;
+        // Read-only loads must not create the environment directory; `read`
+        // treats a missing directory like a missing environment file.
+        let env_dir = config_dir.into().join("envs");
         Self::read(env_dir, name, None).await
     }
 
@@ -410,6 +412,7 @@ mod tests {
 
         assert!(env.tools.is_empty());
         assert!(!config_dir.join("envs").join("global.json").exists());
+        assert!(!config_dir.join("envs").exists());
     }
 
     #[async_std::test]
