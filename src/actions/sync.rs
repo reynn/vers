@@ -1,4 +1,7 @@
-use crate::{environment::Environment, system::System, tool::Tool, version::parse_version};
+use crate::{
+    environment::Environment, error::format_error_chain, system::System, tool::Tool,
+    version::parse_version,
+};
 use indicatif::ProgressBar;
 use tracing::{error, info};
 
@@ -13,7 +16,11 @@ pub async fn sync_tools(env: &mut Environment, system: &'_ System) -> super::Res
                 "Tool {} has been installed at version {}",
                 &tool.name, tool.current_version
             ),
-            Err(install_err) => error!("Failed to install {}. {:?}", &tool.name, install_err),
+            Err(install_err) => error!(
+                "Failed to install {}: {}",
+                &tool.name,
+                format_error_chain(&install_err)
+            ),
         }
         progress_bar.inc(1);
     }

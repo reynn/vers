@@ -10,7 +10,7 @@ mod zip;
 
 #[derive(Debug, Error)]
 pub enum ArchiverError {
-    #[error("IO Error accessing {file_path}. {source:?}")]
+    #[error("IO Error accessing {file_path}. {source}")]
     Io {
         file_path: PathBuf,
         source: std::io::Error,
@@ -23,12 +23,12 @@ pub enum ArchiverError {
     },
     #[error("Extractor({extractor}) encountered an error {message}")]
     ExtractorError { extractor: String, message: String },
-    #[error("Unable to create directory {file_path}. {source:?}")]
+    #[error("Unable to create directory {file_path}. {source}")]
     FailedToCreateDirectory {
         file_path: PathBuf,
         source: std::io::Error,
     },
-    #[error("Failed to create file {file_path}. {source:?}")]
+    #[error("Failed to create file {file_path}. {source}")]
     FailedToCreateFile {
         file_path: PathBuf,
         source: std::io::Error,

@@ -1,4 +1,8 @@
-use crate::{dirs, environment::Environment};
+use crate::{
+    dirs,
+    environment::Environment,
+    validation::{validate_tool_name, validate_version},
+};
 use std::path::Path;
 use tracing::{debug, info};
 
@@ -8,6 +12,11 @@ pub async fn remove_tool(
     remove_all_versions: bool,
 ) -> super::Result<()> {
     if let Some(env_tool) = env.tools.iter().find(|t| t.name == name) {
+        // The tool name and version are read from the environment file and are
+        // joined into paths below, so validate them before deleting anything.
+        validate_tool_name(&env_tool.name)?;
+        validate_version(&env_tool.current_version)?;
+
         info!("Removing {name} from environment. {}", &env.name);
         let env_path = Path::new(&env.base_dir);
 

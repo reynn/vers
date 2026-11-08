@@ -1,4 +1,13 @@
-use crate::{archiver, dirs, download, tool::Tool, version::Version};
+use crate::{
+    archiver, dirs, download,
+    error::format_error_chain,
+    tool::Tool,
+    validation::{
+        validate_alias, validate_environment_name, validate_tool_name, validate_version,
+        ValidationError,
+    },
+    version::Version,
+};
 use async_std::fs::read_to_string;
 use octocrab::models::repos::Asset;
 use serde::{Deserialize, Serialize};
@@ -19,7 +28,7 @@ pub enum EnvironmentFileError {
         path: std::path::PathBuf,
         source: std::io::Error,
     },
-    #[error("Unable to read file '{file_path}'. {source:?}")]
+    #[error("Unable to read file '{file_path}'. {source}")]
     FileReadError {
         file_path: std::path::PathBuf,
         source: std::io::Error,
@@ -53,6 +62,8 @@ pub enum EnvironmentFileError {
         path: std::path::PathBuf,
         source: std::io::Error,
     },
+    #[error(transparent)]
+    Validation(#[from] ValidationError),
 }
 
 #[derive(Debug, Error)]
@@ -62,11 +73,14 @@ pub enum EnvironmentError {
         expected_file_name: String,
         search_base_path: std::path::PathBuf,
     },
-    #[error("Failed to download file '{asset_name}' from '{asset_uri}'")]
+    #[error("Failed to download file '{asset_name}' from '{asset_uri}'. {source}")]
     AssetDownloadError {
         asset_uri: reqwest::Url,
         asset_name: String,
+        source: Box<download::DownloadError>,
     },
+    #[error(transparent)]
+    Validation(#[from] ValidationError),
 }
 
 type Result<T, E = EnvironmentFileError> = std::result::Result<T, E>;
@@ -85,6 +99,7 @@ pub struct Environment {
 
 impl Environment {
     pub async fn load<P: Into<PathBuf>>(config_dir: P, name: &'_ str) -> Result<Self> {
+        validate_environment_name(name)?;
         // Read-only loads must not create the environment directory; `read`
         // treats a missing directory like a missing environment file.
         let env_dir = config_dir.into().join("envs");
@@ -97,6 +112,7 @@ impl Environment {
     /// environment. The lock is held until the returned `Environment` is dropped,
     /// so concurrent writers cannot interleave their read/modify/write cycles.
     pub async fn load_for_update<P: Into<PathBuf>>(config_dir: P, name: &'_ str) -> Result<Self> {
+        validate_environment_name(name)?;
         let env_dir = Self::ensure_env_dir(config_dir.into())?;
         let lock_file = acquire_lock(&env_dir, name)?;
         Self::read(env_dir, name, Some(lock_file)).await
@@ -161,6 +177,8 @@ impl Environment {
     /// [`load_for_update`](Self::load_for_update) so the lock also covers the
     /// read/modify/write cycle.
     pub fn save(&self) -> Result<()> {
+        validate_environment_name(&self.name)?;
+
         let env_dir = Path::new(&self.base_dir).parent().ok_or_else(|| {
             EnvironmentFileError::InvalidBaseDir {
                 base_dir: self.base_dir.clone(),
@@ -226,11 +244,16 @@ impl Environment {
         asset_pattern: &'_ str,
         file_pattern: &'_ str,
     ) -> std::result::Result<(), EnvironmentError> {
+        // Every one of these values is joined into a filesystem path below.
+        validate_tool_name(name)?;
+        validate_alias(alias)?;
+        let version_tag = version.as_tag();
+        validate_version(&version_tag)?;
+
         let env_base_path = Path::new(&self.base_dir);
         let tool_dir = dirs::get_tool_download_dir(env_base_path, name);
         info!("Actual tools dir: {:?}", tool_dir);
 
-        let version_tag = version.as_tag();
         let tool_version_dir =
             dirs::get_tool_version_download_dir(env_base_path, name, &version_tag);
 
@@ -310,8 +333,9 @@ impl Environment {
                         }
                         Err(e) => {
                             error!(
-                                "Failed to extract using '{}' Error: {:?}",
-                                extractor_name, e,
+                                "Failed to extract using '{}'. Error: {}",
+                                extractor_name,
+                                format_error_chain(&e)
                             );
                         }
                     }
@@ -319,9 +343,10 @@ impl Environment {
 
                 Ok(())
             }
-            Err(_) => Err(EnvironmentError::AssetDownloadError {
+            Err(source) => Err(EnvironmentError::AssetDownloadError {
                 asset_uri: asset.browser_download_url,
                 asset_name: asset.name,
+                source: Box::new(source),
             }),
         }
     }

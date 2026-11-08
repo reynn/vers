@@ -1,8 +1,10 @@
 use crate::{
     environment::Environment,
+    error::format_error_chain,
     github,
     system::System,
     tool::Tool,
+    validation::{parse_tool_name, validate_alias, validate_version},
     version::{parse_version, Version},
 };
 use skim::{
@@ -26,24 +28,21 @@ pub async fn add_new_tool(
     show: bool,
     pre_release: bool,
 ) -> super::Result<()> {
-    let split_name: Vec<&str> = name.split('@').collect();
-    let org_repo = if split_name.len() > 1 {
-        split_name[0]
-    } else {
-        name
+    let (org_repo, requested_version) = match name.split_once('@') {
+        Some((org_repo, version)) => (org_repo, Some(version)),
+        None => (name, None),
     };
-    let split_org_repo: Vec<&str> = org_repo.split('/').collect();
-    let owner = split_org_repo[0];
-    let repo = split_org_repo[1];
+    let (owner, repo) = parse_tool_name(org_repo)?;
     let alias = alias.unwrap_or_else(|| repo.to_string());
+    validate_alias(&alias)?;
 
     let asset_pattern = &patterns.asset.unwrap_or_default();
     let file_pattern = &patterns.file.unwrap_or_else(|| alias.clone());
 
     info!("Owner `{owner}`, Repo `{repo}`, Alias `{alias}`, Pattern `{asset_pattern}`, Filter `{file_pattern}`");
 
-    let versions: Vec<String> = if split_name.len() > 1 {
-        vec![split_name[1].to_string()]
+    let versions: Vec<String> = if let Some(version) = requested_version {
+        vec![version.to_string()]
     } else {
         let versions = match github::get_repo_releases(owner, repo, pre_release).await {
             Ok(res) => res,
@@ -81,6 +80,7 @@ pub async fn add_new_tool(
     };
 
     for version in versions.iter() {
+        validate_version(version)?;
         let parsed_version = parse_version(version);
 
         let tool = Tool::new(
@@ -93,7 +93,11 @@ pub async fn add_new_tool(
 
         match super::handle_tool_install(env, &tool, system, Some(parsed_version)).await {
             Ok(_) => println!("Installation of tool {} complete.", tool.name),
-            Err(install_err) => error!("{:?}", install_err),
+            Err(install_err) => error!(
+                "Failed to install {}: {}",
+                tool.name,
+                format_error_chain(&install_err)
+            ),
         }
     }
     Ok(())

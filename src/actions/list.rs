@@ -15,7 +15,12 @@ pub async fn list_tools(
     let tools = &env.tools;
 
     if tools.is_empty() {
-        return Err(super::ActionsError::EmptyEnvironment(env.name.to_string()));
+        if matches!(&output_type, cli::ListOutputType::Json) {
+            println!("[]");
+        } else {
+            println!("No tools installed in the '{}' environment.", env.name);
+        }
+        return Ok(());
     }
 
     #[derive(Tabled, Serialize, PartialEq, PartialOrd, Eq, Ord)]
@@ -78,4 +83,19 @@ pub async fn list_tools(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[async_std::test]
+    async fn an_empty_environment_is_not_an_error() {
+        let mut env = Environment::default();
+        env.name = "global".to_string();
+
+        list_tools(&env, false, cli::ListOutputType::Text)
+            .await
+            .unwrap();
+    }
 }

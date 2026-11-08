@@ -41,7 +41,7 @@ impl Archiver for TarArchiver {
                         return Err(ArchiverError::ExtractorError {
                             extractor: "tar".to_string(),
                             message: format!(
-                                "Unable to extract file from archive {}. {:?}",
+                                "Unable to extract file from archive {}. {}",
                                 file_path.display(),
                                 entry_err,
                             ),

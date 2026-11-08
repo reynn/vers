@@ -19,6 +19,7 @@ use crate::{
     github::{self, GitHubError},
     system::{OperatingSystem, PlatformArchitecture, System},
     tool::Tool,
+    validation::{parse_tool_name, validate_version, ValidationError},
     version::Version,
 };
 use thiserror::Error;
@@ -31,15 +32,13 @@ pub enum ActionsError {
         symlink: bool,
         source: std::io::Error,
     },
-    #[error("Failed to delete directory '{directory}. {source}")]
+    #[error("Failed to delete directory '{directory}'. {source}")]
     DirectoryDelete {
         directory: std::path::PathBuf,
         source: std::io::Error,
     },
     #[error("Tool '{tool_name}' not found in the '{env_name}' environment")]
     ToolNotFound { tool_name: String, env_name: String },
-    #[error("The environment {0}, does not contain any tools")]
-    EmptyEnvironment(String),
     #[error("Unable to find release for {0}")]
     ReleaseNotFound(String),
     #[error("Unable to find asset for {tool_name}@{version} for OS: {os}; Arch: {arch}")]
@@ -49,10 +48,12 @@ pub enum ActionsError {
         arch: PlatformArchitecture,
         os: OperatingSystem,
     },
-    #[error("Error with the GitHub API {0}")]
+    #[error("GitHub API error: {0}")]
     GitHub(#[from] GitHubError),
-    #[error("Environment error {0}")]
+    #[error(transparent)]
     Environment(#[from] EnvironmentError),
+    #[error(transparent)]
+    Validation(#[from] ValidationError),
 }
 
 type Result<T, E = ActionsError> = std::result::Result<T, E>;
@@ -63,9 +64,7 @@ async fn handle_tool_install(
     system: &'_ System,
     version: Option<Version>,
 ) -> Result<()> {
-    let split_org_repo: Vec<&str> = tool.name.split('/').collect();
-    let owner = split_org_repo[0];
-    let repo = split_org_repo[1];
+    let (owner, repo) = parse_tool_name(&tool.name)?;
 
     let version = match version {
         Some(v) => v,
@@ -74,6 +73,7 @@ async fn handle_tool_install(
             None => return Err(ActionsError::ReleaseNotFound(tool.name.to_string())),
         },
     };
+    validate_version(&version.as_tag())?;
 
     if tool.current_version != version.as_tag() {
         let release = github::get_specific_release_for_repo(owner, repo, &version).await?;
