@@ -83,15 +83,25 @@ pub enum Actions {
     },
     /// Remove a tool from the designated environment
     Remove {
-        /// name of the tool to remove from the environment
+        /// name of the tool to remove from the environment.
+        ///
+        /// Accepts `owner/repo` or `owner/repo@version`. Without a version, the
+        /// active version is removed. Version tags are matched exactly (a leading
+        /// `v` is not stripped).
         name: String,
-        /// Remove all versions of a tool. Default is to delete the version used by the environment
-        /// only.
+        /// Remove all versions of a tool from this environment. Default is to
+        /// forget only the active version (or the explicit `@version`).
         #[arg(short, long)]
         all: bool,
-        /// Removes the symlink only while leaving the downloaded assets in tact for reuse later
+        /// Non-purging removal (same record updates as the default). Kept for
+        /// compatibility; cannot be combined with `--purge`.
         #[arg(short, long)]
         link_only: bool,
+        /// Delete downloaded assets from the shared cache after removing them
+        /// from this environment. Refuses when other environments still
+        /// reference the targeted versions.
+        #[arg(long)]
+        purge: bool,
     },
     /// List tools available in the designated environment
     List {
@@ -143,24 +153,13 @@ pub enum ActionErrors {
 type Result<T, E = ActionErrors> = std::result::Result<T, E>;
 
 impl Actions {
-    /// Whether this action can mutate (and therefore needs to persist) the environment.
-    fn writes_environment(&self) -> bool {
-        matches!(
-            self,
-            Actions::Add { .. } | Actions::Remove { .. } | Actions::Update { .. } | Actions::Sync
-        )
-    }
-
     pub async fn execute(&self, config_dir: PathBuf, env_name: &'_ str) -> Result<()> {
         let system = System::default();
-        // Mutating commands hold the environment lock for the whole
-        // read/modify/write cycle; read-only commands do not lock or save.
-        let mut loaded_env = if self.writes_environment() {
-            Environment::load_for_update(&config_dir, env_name).await?
-        } else {
-            Environment::load(&config_dir, env_name).await?
-        };
 
+        // Load the environment only in the arms that need it. Commands that do
+        // not touch an environment (completions) must not create or read one.
+        // Mutating commands hold the lock for the whole read/modify/write cycle;
+        // read-only commands only read.
         match self {
             Actions::Add {
                 name,
@@ -170,8 +169,9 @@ impl Actions {
                 pre_release,
                 show,
             } => {
-                actions::add_new_tool(
-                    &mut loaded_env,
+                let mut env = Environment::load_for_update(&config_dir, env_name).await?;
+                let result = actions::add_new_tool(
+                    &mut env,
                     name,
                     &system,
                     actions::Patterns {
@@ -182,25 +182,39 @@ impl Actions {
                     *show,
                     *pre_release,
                 )
-                .await?;
-                loaded_env.save()?;
+                .await;
+                env.save()?;
+                result?;
                 Ok(())
             }
             Actions::Remove {
                 name,
                 all,
-                link_only: _link_only,
+                link_only,
+                purge,
             } => {
-                actions::remove_tool(&mut loaded_env, name, *all).await?;
-                loaded_env.save()?;
+                let mut env = Environment::load_for_update(&config_dir, env_name).await?;
+                actions::remove_tool(
+                    &mut env,
+                    name,
+                    actions::RemoveOptions {
+                        all: *all,
+                        link_only: *link_only,
+                        purge: *purge,
+                    },
+                )
+                .await?;
+                env.save()?;
                 Ok(())
             }
             Actions::List { installed, output } => {
-                Ok(actions::list_tools(&loaded_env, *installed, output.to_owned()).await?)
+                let env = Environment::load(&config_dir, env_name).await?;
+                Ok(actions::list_tools(&env, *installed, output.to_owned()).await?)
             }
             Actions::Update { name } => {
-                actions::update_tools(
-                    &mut loaded_env,
+                let mut env = Environment::load_for_update(&config_dir, env_name).await?;
+                let result = actions::update_tools(
+                    &mut env,
                     &system,
                     if let Some(name) = name {
                         actions::UpdateType::Specific(name.to_string())
@@ -208,8 +222,9 @@ impl Actions {
                         actions::UpdateType::All
                     },
                 )
-                .await?;
-                loaded_env.save()?;
+                .await;
+                env.save()?;
+                result?;
                 Ok(())
             }
             Actions::Completions { shell } => {
@@ -221,24 +236,16 @@ impl Actions {
                 shell,
                 bare_path,
             } => {
-                // if the user provided an environment name that differs from the one we
-                // already have loaded we need to load the correct one
-                let env = if let Some(specific_name) = name {
-                    if specific_name != &loaded_env.name {
-                        Environment::load(&config_dir, specific_name).await?
-                    } else {
-                        loaded_env
-                    }
-                } else {
-                    loaded_env
-                };
-
+                let target_env = name.as_deref().unwrap_or(env_name);
+                let env = Environment::load(&config_dir, target_env).await?;
                 actions::show_env_config(&env, *bare_path, *shell);
                 Ok(())
             }
             Actions::Sync => {
-                actions::sync_tools(&mut loaded_env, &system).await?;
-                loaded_env.save()?;
+                let mut env = Environment::load_for_update(&config_dir, env_name).await?;
+                let result = actions::sync_tools(&mut env, &system).await;
+                env.save()?;
+                result?;
                 Ok(())
             }
         }

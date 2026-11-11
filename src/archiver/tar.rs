@@ -23,7 +23,11 @@ impl Archiver for TarArchiver {
             for entry in entries {
                 match entry {
                     Ok(mut file) => {
-                        let out_file_name = file.path().unwrap();
+                        let out_file_name =
+                            file.path().map_err(|error| ArchiverError::ExtractorError {
+                                extractor: "tar".to_string(),
+                                message: error.to_string(),
+                            })?;
                         debug!(
                             "Extracting '{}' from archive '{}'",
                             out_file_name.display(),
@@ -41,7 +45,7 @@ impl Archiver for TarArchiver {
                         return Err(ArchiverError::ExtractorError {
                             extractor: "tar".to_string(),
                             message: format!(
-                                "Unable to extract file from archive {}. {:?}",
+                                "Unable to extract file from archive {}. {}",
                                 file_path.display(),
                                 entry_err,
                             ),

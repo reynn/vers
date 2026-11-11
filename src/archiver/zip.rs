@@ -27,7 +27,13 @@ impl Archiver for ZipArchiver {
             })?;
 
         for i in 0..archive.len() {
-            let mut archive_file = archive.by_index(i).unwrap();
+            let mut archive_file =
+                archive
+                    .by_index(i)
+                    .map_err(|error| ArchiverError::ExtractorError {
+                        extractor: "zip".to_string(),
+                        message: error.to_string(),
+                    })?;
             let out_path = match archive_file.enclosed_name() {
                 Some(path) => path.to_owned(),
                 None => continue,
@@ -47,6 +53,18 @@ impl Archiver for ZipArchiver {
                     }
                 })?;
             } else {
+                // Ensure the parent directory exists; zip archives do not always
+                // contain explicit directory entries (and some list them after
+                // the files they contain).
+                if let Some(parent) = out_path.parent() {
+                    std::fs::create_dir_all(parent).map_err(|create_err| {
+                        ArchiverError::FailedToCreateDirectory {
+                            file_path: parent.to_path_buf(),
+                            source: create_err,
+                        }
+                    })?;
+                }
+
                 // write file
                 let mut out_file = std::fs::File::create(&out_path).map_err(|file_create_err| {
                     ArchiverError::FailedToCreateFile {
@@ -95,5 +113,50 @@ impl Archiver for ZipArchiver {
 
     fn name(&self) -> &'static str {
         "zip"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::tempdir;
+    use zip::{write::FileOptions, ZipWriter};
+
+    #[async_std::test]
+    async fn extracts_files_without_explicit_directory_entries() {
+        let dir = tempdir().unwrap();
+        let archive_path = dir.path().join("gh.zip");
+        {
+            let file = std::fs::File::create(&archive_path).unwrap();
+            let mut archive = ZipWriter::new(file);
+
+            archive
+                .start_file("gh_2.103.3_macOS_arm64/LICENSE", FileOptions::default())
+                .unwrap();
+            archive.write_all(b"license text").unwrap();
+
+            archive
+                .start_file("gh_2.103.3_macOS_arm64/bin/gh", FileOptions::default())
+                .unwrap();
+            archive.write_all(b"binary").unwrap();
+
+            archive.finish().unwrap();
+        }
+
+        let out_dir = dir.path().join("out");
+        ZipArchiver
+            .extract_to(&archive_path, &out_dir)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(out_dir.join("gh_2.103.3_macOS_arm64/LICENSE")).unwrap(),
+            "license text"
+        );
+        assert_eq!(
+            std::fs::read(out_dir.join("gh_2.103.3_macOS_arm64/bin/gh")).unwrap(),
+            b"binary"
+        );
     }
 }

@@ -1,4 +1,4 @@
-use super::{Archiver, Result};
+use super::{Archiver, ArchiverError, Result};
 use async_trait::async_trait;
 use std::path::Path;
 
@@ -7,21 +7,22 @@ pub struct TarGzipArchiver;
 #[async_trait()]
 impl Archiver for TarGzipArchiver {
     async fn extract_to(&self, file_path: &'_ Path, out_dir: &'_ Path) -> Result<()> {
-        let gzip_archiver = super::GzipArchiver;
-        let tar_archiver = super::TarArchiver;
         tracing::debug!(
             "Extracting {} using the 'TarGzip' Archiver",
             file_path.display()
         );
 
-        gzip_archiver.extract_to(file_path, out_dir).await?;
-        tar_archiver
-            .extract_to(
-                out_dir.join(file_path.file_stem().unwrap()).as_path(),
-                out_dir,
-            )
-            .await?;
-        Ok(())
+        let file = std::fs::File::open(file_path).map_err(|source| ArchiverError::Io {
+            file_path: file_path.to_path_buf(),
+            source,
+        })?;
+        let decoder = flate2::read::MultiGzDecoder::new(file);
+        tar::Archive::new(decoder)
+            .unpack(out_dir)
+            .map_err(|source| ArchiverError::Io {
+                file_path: file_path.to_path_buf(),
+                source,
+            })
     }
 
     async fn extract(&self, file_path: &'_ Path) -> Result<()> {
@@ -31,7 +32,10 @@ impl Archiver for TarGzipArchiver {
     fn can_handle(&self, file_path: &'_ Path) -> bool {
         file_path
             .file_name()
-            .map(|f| f.to_str().unwrap_or_default().ends_with(".tar.gz"))
+            .map(|f| {
+                let name = f.to_str().unwrap_or_default();
+                name.ends_with(".tar.gz") || name.ends_with(".tgz")
+            })
             .unwrap_or_default()
     }
 

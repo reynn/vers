@@ -1,12 +1,20 @@
 // Turn off common dev assertions only for debug builds, release builds will still work as normal
 #![warn(clippy::all)]
 
+use std::error::Error;
 use tracing::{debug, info};
 use tracing_subscriber::{filter::filter_fn, prelude::*};
-use vers::{cli::Cli, dirs};
+use vers::{cli::Cli, dirs, error::format_error_chain};
 
 #[async_std::main]
-async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
+async fn main() {
+    if let Err(error) = run().await {
+        eprintln!("Error: {}", format_error_chain(error.as_ref()));
+        std::process::exit(1);
+    }
+}
+
+async fn run() -> std::result::Result<(), Box<dyn Error>> {
     let opts = Cli::default();
 
     tracing_subscriber::registry()

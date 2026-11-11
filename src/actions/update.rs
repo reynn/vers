@@ -1,6 +1,9 @@
-use crate::{environment::Environment, system::System, tool::Tool, version::parse_version};
+use crate::{
+    environment::Environment, error::format_error_chain, system::System, tool::Tool,
+    version::parse_version,
+};
 use indicatif::{ProgressBar, ProgressStyle};
-use tracing::{error, info};
+use tracing::info;
 
 pub enum UpdateType {
     All,
@@ -27,16 +30,24 @@ pub async fn update_tools(
                 progress_bar.set_message(tool.name.clone());
                 match super::handle_tool_install(env, &tool, system, None).await {
                     Ok(_) => info!("Tool {} complete.", &tool.name),
-                    Err(install_err) => failed_tools.push(install_err.to_string()),
+                    Err(install_err) => failed_tools.push(format!(
+                        "{}: {}",
+                        tool.name,
+                        format_error_chain(&install_err)
+                    )),
                 }
                 progress_bar.inc(1);
             }
 
-            if !failed_tools.is_empty() {
-                error!("{}", failed_tools.join("\n"));
+            progress_bar.finish_and_clear();
+            if failed_tools.is_empty() {
+                Ok(())
+            } else {
+                Err(super::ActionsError::ToolFailures {
+                    operation: "update",
+                    failures: failed_tools.join("; "),
+                })
             }
-
-            Ok(())
         }
         UpdateType::Specific(tool_name) => {
             println!("-> Updating {tool_name}...");
@@ -52,14 +63,15 @@ pub async fn update_tools(
                 .iter()
                 .find(|t| t.name == split_name[0] || t.alias == split_name[0])
             {
-                info!("Updating: {:?}", tool);
+                info!("Updating {}@{}", tool.name, tool.current_version);
 
-                match super::handle_tool_install(env, tool, system, version).await {
-                    Ok(_) => info!("{} has been updated.", &tool.name),
-                    Err(install_err) => error!("{:?}", install_err),
-                }
+                super::handle_tool_install(env, tool, system, version).await?;
+                info!("{} has been updated.", &tool.name);
             } else {
-                error!("{} is not found in the environment.", tool_name);
+                return Err(super::ActionsError::ToolNotFound {
+                    tool_name,
+                    env_name: env.name.clone(),
+                });
             }
             Ok(())
         }
