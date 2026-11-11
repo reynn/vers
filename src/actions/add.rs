@@ -12,7 +12,7 @@ use skim::{
     Skim,
 };
 use std::io::Cursor;
-use tracing::{error, info};
+use tracing::info;
 
 pub struct Patterns {
     pub asset: Option<String>,
@@ -79,6 +79,11 @@ pub async fn add_new_tool(
         }
     };
 
+    if versions.is_empty() {
+        return Err(super::ActionsError::ReleaseNotFound(org_repo.to_string()));
+    }
+
+    let mut failures = Vec::new();
     for version in versions.iter() {
         validate_version(version)?;
         let parsed_version = parse_version(version);
@@ -93,12 +98,20 @@ pub async fn add_new_tool(
 
         match super::handle_tool_install(env, &tool, system, Some(parsed_version)).await {
             Ok(_) => println!("Installation of tool {} complete.", tool.name),
-            Err(install_err) => error!(
-                "Failed to install {}: {}",
+            Err(install_err) => failures.push(format!(
+                "{}@{}: {}",
                 tool.name,
+                version,
                 format_error_chain(&install_err)
-            ),
+            )),
         }
     }
-    Ok(())
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(super::ActionsError::ToolFailures {
+            operation: "install",
+            failures: failures.join("; "),
+        })
+    }
 }

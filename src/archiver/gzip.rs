@@ -42,7 +42,10 @@ impl Archiver for GzipArchiver {
     fn can_handle(&self, file_path: &'_ Path) -> bool {
         file_path
             .file_name()
-            .map(|f| f.to_str().unwrap_or_default().ends_with(".tar.gz"))
+            .map(|f| {
+                let name = f.to_str().unwrap_or_default();
+                name.ends_with(".gz") && !name.ends_with(".tar.gz")
+            })
             .unwrap_or_default()
     }
 

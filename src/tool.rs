@@ -1,5 +1,6 @@
 use crate::version::Version;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
 #[serde(rename_all = "snake_case", default)]
@@ -10,6 +11,9 @@ pub struct Tool {
     pub file_pattern: String,
     pub current_version: String,
     pub installed_versions: Vec<String>,
+    /// Executable path relative to the current version's download directory.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub binary_path: Option<PathBuf>,
 }
 
 impl Tool {
@@ -28,6 +32,7 @@ impl Tool {
             file_pattern: file_pattern.to_string(),
             current_version: version.clone(),
             installed_versions: vec![version],
+            binary_path: None,
         }
     }
 

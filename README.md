@@ -44,6 +44,40 @@ $ vers add jesseduffield/lazygit --alias lg --file-filter '^lg$'
 
 Since the repo name is `lazygit` but the actual binary name is `lg` the filter needs to be provided so `vers` can find the extracted binary.
 
+### Release assets and repair
+
+Vers supports `.tar.gz`, `.tgz`, `.tar`, `.zip`, and single-file `.gz` assets.
+Uncompressed ELF binaries, Mach-O binaries, and scripts with a shebang are installed directly,
+even when the asset filename differs from the command alias. For these raw assets,
+`--asset-pattern` selects the download and `--file-filter` is not needed.
+The selected executable is given owner execute permission. Unsupported assets,
+corrupt archives, and archives without the requested binary return an error.
+
+`vers sync` verifies each environment's cached executable and restores missing,
+dangling, or incorrect symlinks without downloading again. If the executable or
+its version directory is missing, sync reinstalls the recorded release tag.
+Regular files at an alias path are never overwritten; move them aside and retry.
+
+### Removing tools safely
+
+`vers remove owner/repo` removes the active version from the selected environment.
+Downloaded assets are preserved for reuse; `--link-only` explicitly requests this
+same non-purging behavior. Use `owner/repo@tag` to remove a specific recorded
+version, or `--all` to remove the tool and all its version records from this
+environment. Removing an inactive version leaves the active command unchanged.
+
+If other recorded versions remain after removing the active version, Vers switches
+to the last remaining version using its cached executable. If that executable is
+missing, removal fails without changing the installation; repair it with
+`vers sync` first, or use `--all` to detach the tool entirely.
+
+Deleting downloaded assets requires `--purge`. Combine it with `--all` to purge
+the entire repository cache, or use it without `--all` to purge just the selected
+version. Purges are refused when another environment records a dependency on
+those assets, or when its configuration cannot be checked safely.
+`--purge` conflicts with `--link-only`; `--all` cannot be combined with an explicit
+version. Regular files and directories at command alias paths are never removed.
+
 ## Environments
 
 Multiple environments are supported but are still in an early state.

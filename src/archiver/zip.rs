@@ -27,7 +27,13 @@ impl Archiver for ZipArchiver {
             })?;
 
         for i in 0..archive.len() {
-            let mut archive_file = archive.by_index(i).unwrap();
+            let mut archive_file =
+                archive
+                    .by_index(i)
+                    .map_err(|error| ArchiverError::ExtractorError {
+                        extractor: "zip".to_string(),
+                        message: error.to_string(),
+                    })?;
             let out_path = match archive_file.enclosed_name() {
                 Some(path) => path.to_owned(),
                 None => continue,

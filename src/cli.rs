@@ -83,15 +83,25 @@ pub enum Actions {
     },
     /// Remove a tool from the designated environment
     Remove {
-        /// name of the tool to remove from the environment
+        /// name of the tool to remove from the environment.
+        ///
+        /// Accepts `owner/repo` or `owner/repo@version`. Without a version, the
+        /// active version is removed. Version tags are matched exactly (a leading
+        /// `v` is not stripped).
         name: String,
-        /// Remove all versions of a tool. Default is to delete the version used by the environment
-        /// only.
+        /// Remove all versions of a tool from this environment. Default is to
+        /// forget only the active version (or the explicit `@version`).
         #[arg(short, long)]
         all: bool,
-        /// Removes the symlink only while leaving the downloaded assets in tact for reuse later
+        /// Non-purging removal (same record updates as the default). Kept for
+        /// compatibility; cannot be combined with `--purge`.
         #[arg(short, long)]
         link_only: bool,
+        /// Delete downloaded assets from the shared cache after removing them
+        /// from this environment. Refuses when other environments still
+        /// reference the targeted versions.
+        #[arg(long)]
+        purge: bool,
     },
     /// List tools available in the designated environment
     List {
@@ -160,7 +170,7 @@ impl Actions {
                 show,
             } => {
                 let mut env = Environment::load_for_update(&config_dir, env_name).await?;
-                actions::add_new_tool(
+                let result = actions::add_new_tool(
                     &mut env,
                     name,
                     &system,
@@ -172,17 +182,28 @@ impl Actions {
                     *show,
                     *pre_release,
                 )
-                .await?;
+                .await;
                 env.save()?;
+                result?;
                 Ok(())
             }
             Actions::Remove {
                 name,
                 all,
-                link_only: _link_only,
+                link_only,
+                purge,
             } => {
                 let mut env = Environment::load_for_update(&config_dir, env_name).await?;
-                actions::remove_tool(&mut env, name, *all).await?;
+                actions::remove_tool(
+                    &mut env,
+                    name,
+                    actions::RemoveOptions {
+                        all: *all,
+                        link_only: *link_only,
+                        purge: *purge,
+                    },
+                )
+                .await?;
                 env.save()?;
                 Ok(())
             }
@@ -192,7 +213,7 @@ impl Actions {
             }
             Actions::Update { name } => {
                 let mut env = Environment::load_for_update(&config_dir, env_name).await?;
-                actions::update_tools(
+                let result = actions::update_tools(
                     &mut env,
                     &system,
                     if let Some(name) = name {
@@ -201,8 +222,9 @@ impl Actions {
                         actions::UpdateType::All
                     },
                 )
-                .await?;
+                .await;
                 env.save()?;
+                result?;
                 Ok(())
             }
             Actions::Completions { shell } => {
@@ -221,8 +243,9 @@ impl Actions {
             }
             Actions::Sync => {
                 let mut env = Environment::load_for_update(&config_dir, env_name).await?;
-                actions::sync_tools(&mut env, &system).await?;
+                let result = actions::sync_tools(&mut env, &system).await;
                 env.save()?;
+                result?;
                 Ok(())
             }
         }
